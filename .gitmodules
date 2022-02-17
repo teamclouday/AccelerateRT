@@ -1,0 +1,14 @@
+[submodule "external/glfw"]
+	path = external/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "external/imgui"]
+	path = external/imgui
+	url = https://github.com/ocornut/imgui.git
+	branch = docking
+[submodule "external/glm"]
+	path = external/glm
+	url = https://github.com/teamclouday/glm.git
+	branch = customize
+[submodule "external/glew-cmake"]
+	path = external/glew-cmake
+	url = https://github.com/Perlmint/glew-cmake.git
