@@ -1,4 +1,5 @@
-bin/*
-build/*
 .vscode/*
-imgui.ini
+
+# Added by cargo
+
+/target
