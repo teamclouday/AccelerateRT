@@ -1,4 +1,7 @@
 [deps]
+ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
+BSON = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
 CImGui = "5d785b6c-b76f-510e-a07c-3070796c7e87"
 GLFW = "f7f18e0c-5ee9-5ccd-a5bf-e8befd85ed98"
 ModernGL = "66fc600b-dfda-50eb-8b99-91cfa97b1301"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
