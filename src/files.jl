@@ -50,7 +50,7 @@ function loadObjFile(path::String)
             push!(normals_temp, data)
         elseif type == "f"
             freq = length(findall("/", vals[1]))
-            data = MVector{6, Int32}(0,0,0,0,0,0)
+            data = MVector{6, UInt32}(0,0,0,0,0,0)
             missingNormal = false
             if freq <= 1
                 raw = [abs(parse(Int32, split(val, '/')[1])) for val in vals[1:3]]
@@ -88,11 +88,11 @@ function loadObjFile(path::String)
     # make sure obj is not empty
     @assert !isempty(vertices) "Failed to load $path, no vertex data!"
     # collect faces and normals in correct order
-    faces = Vector3{Int32}[]
+    faces = Vector3{UInt32}[]
     normals = Vector3{Float32}[]
     if isempty(faces_temp)
         for i in range(1, step=3, stop=length(vertices))
-            push!(faces, Vector3{Int32}(i-1, i, i+1))
+            push!(faces, Vector3{UInt32}(i-1, i, i+1))
             n = computeNormal(
                 vertices[i],
                 vertices[i+1],
@@ -105,7 +105,7 @@ function loadObjFile(path::String)
         for face in faces_temp
             ix, iy, iz = face[1], face[2], face[3]
             ia, ib, ic = face[4], face[5], face[6]
-            push!(faces, Vector3{Int32}(ix-1, iy-1, iz-1))
+            push!(faces, Vector3{UInt32}(ix-1, iy-1, iz-1))
             normals[ix] = normals_temp[ia]
             normals[iy] = normals_temp[ib]
             normals[iz] = normals_temp[ic]

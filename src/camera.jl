@@ -20,7 +20,7 @@ mutable struct Camera
     p_front::Vector3
     p_center::Vector3
     Camera(;pos::Vector3, center::Vector3) = begin
-        new(60.0, 0.1, 1000.0, 0.1, 0.1, 0.0, 1.0, true,
+        new(45.0, 0.1, 1000.0, 0.1, 0.1, 0.0, 1.0, true,
             pos, Vector3{Float32}(0.0, 1.0, 0.0),
             Vector3{Float32}(0.0, 0.0, 0.0),
             Vector3{Float32}(0.0, 0.0, 0.0), center)

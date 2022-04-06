@@ -10,32 +10,6 @@ const APPNAME   = "AccelerateRT"
 const APPWIDTH  = 800
 const APPHEIGHT = 600
 
-mutable struct Configs
-    showUI
-    keyDown
-    mousePos
-    mouseDown
-    imguiFocus
-    winW
-    winH
-    background::Vector4
-    wireframe
-    Configs() = begin
-        new(true, [false, false, false, false],
-            [-1.0,0.0,0.0,0.0], [false, false],
-            false, APPWIDTH, APPHEIGHT,
-            Vector4{Float32}(0.0,0.0,0.0,1.0), false)
-    end
-end
-
-mutable struct Application
-    window
-    imgui
-    camera
-    model
-    configs
-end
-
 function parseCommandline()
     s = ArgParseSettings()
     @add_arg_table! s begin
@@ -52,23 +26,79 @@ function main()
     model = loadObjFile(modelPath)
     describeModel(model)
     app = initApp(model)
-    renderLoop(app)
+    renderData = loadRenderData(app)
+    renderLoop(app, renderData)
     destroyApp(app)
 end
 
-function renderLoop(app)
+mutable struct Configs
+    showUI # where to show UI
+    keyDown # which keys in WASD are down
+    mousePos # current mouse position
+    mouseDown # which mouse buttons are down
+    imguiFocus # is UI in focus
+    winW # window width
+    winH # window height
+    background::Color4 # background color
+    wireframe # whether is wireframe mode
+    gldebug # whether to output OpenGL debug info
+    Configs() = begin
+        new(true, [false, false, false, false],
+            [-1.0,0.0,0.0,0.0], [false, false],
+            false, APPWIDTH, APPHEIGHT,
+            Color4{Float32}(0,0,0,1), false, false)
+    end
+end
+
+mutable struct Application
+    window
+    imgui
+    camera
+    model
+    configs
+end
+
+mutable struct RenderData
+    VAO
+    VBOs
+    EBO
+    pNolit # nolit shader program
+    pLight # light shader program
+    color::Color3 # model base color
+    tTrans::Vector3 # model translation
+    tRotScale::Vector2 # model rotation (around Y axis) & scale
+    enableLight
+end
+
+function renderLoop(app, renderData)
     while !GLFW.WindowShouldClose(app.window)
         app.configs.winW, app.configs.winH = GLFW.GetFramebufferSize(app.window)
-        glClearColor(app.configs.background...)
         if app.configs.wireframe
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
         else
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
         end
         glViewport(0, 0, app.configs.winW, app.configs.winH)
+        glClearColor(app.configs.background...)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        renderUI(app)
+        # render model
+        mvp = computeProjection(app.camera.fov, app.camera.ratio, app.camera.near, app.camera.far) *
+            computeView(app.camera.p_pos, app.camera.p_center, app.camera.p_up) *
+            computeScale(
+                computeRotation(computeTranslate(renderData.tTrans), renderData.tRotScale.x, Vector3{Float32}(0,1,0)),
+                Vector3{Float32}(renderData.tRotScale.y, renderData.tRotScale.y, renderData.tRotScale.y))
+        prog = renderData.enableLight ? renderData.pLight : renderData.pNolit
+        glUseProgram(prog)
+        glUniform3fv(glGetUniformLocation(prog, "baseColor"), 1, renderData.color)
+        glUniformMatrix4fv(glGetUniformLocation(prog, "mvp"), 1, GL_FALSE, mvp)
+        glBindVertexArray(renderData.VAO)
+        glDrawElements(GL_TRIANGLES, length(app.model.faces), GL_UNSIGNED_INT, Ptr{Cvoid}(0))
+        # glDrawArrays(GL_TRIANGLES, 0, 8)
+        glBindVertexArray(0)
+        glUseProgram(0)
+
+        renderUI(app, renderData)
         GLFW.PollEvents()
         GLFW.SwapBuffers(app.window)
         begin
@@ -87,7 +117,7 @@ function renderLoop(app)
     end
 end
 
-function renderUI(app)
+function renderUI(app, renderData)
     if !app.configs.showUI
         return
     end
@@ -105,7 +135,20 @@ function renderUI(app)
             CImGui.Text(@sprintf("FPS: %.2f", CImGui.GetIO().Framerate))
             CImGui.Separator()
             @c CImGui.Checkbox("Wireframe", &app.configs.wireframe)
-            @c CImGui.ColorEdit3("Background", &app.configs.background[0])
+            if @c CImGui.Checkbox("OpenGL Debug", &app.configs.gldebug)
+                if app.configs.gldebug
+                    glEnable(GL_DEBUG_OUTPUT)
+                    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS)
+                    glDebugMessageCallback(glDebugCallbackC, C_NULL)
+                    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, C_NULL, C_NULL, GL_TRUE)
+                    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, C_NULL, C_NULL, false)
+                else
+                    glDisable(GL_DEBUG_OUTPUT)
+                    glDisable(GL_DEBUG_OUTPUT_SYNCHRONOUS)
+                    glDebugMessageCallback(C_NULL, C_NULL)
+                end
+            end
+            CImGui.ColorEdit3("Background", app.configs.background)
             CImGui.Separator()
             CImGui.Text("Press F12 to toggle UI")
             CImGui.Text("Author: teamclouday")
@@ -113,10 +156,10 @@ function renderUI(app)
         end
         if CImGui.BeginTabItem("Camera")
             cam = app.camera
-            if @c CImGui.DragFloat3("Position", &cam.p_pos[0], 0.001f0)
+            if CImGui.DragFloat3("Position", cam.p_pos, 0.001f0)
                 updateCamera!(cam)
             end
-            if @c CImGui.DragFloat3("Center", &cam.p_center[0], 0.001f0)
+            if CImGui.DragFloat3("Center", cam.p_center, 0.001f0)
                 updateCamera!(cam)
             end
             @c CImGui.Checkbox("Lock Center", &cam.lockCenter)
@@ -144,6 +187,14 @@ function renderUI(app)
             end
             CImGui.EndTabItem()
         end
+        if CImGui.BeginTabItem("Model")
+            CImGui.ColorEdit3("Color", renderData.color)
+            CImGui.DragFloat3("Translation", renderData.tTrans, 0.001f0)
+            @c CImGui.DragFloat("Rotation", &renderData.tRotScale.x, 0.001f0)
+            @c CImGui.DragFloat("Scale", &renderData.tRotScale.y, 0.001f0, 0.001f0)
+            @c CImGui.Checkbox("Enable Light", &renderData.enableLight)
+            CImGui.EndTabItem()
+        end
         CImGui.EndTabBar()
     end
     CImGui.End()
@@ -162,10 +213,10 @@ function initApp(model)
     GLFW.MakeContextCurrent(window)
     GLFW.SwapInterval(1)
     # setup OpenGL
-    glEnable(GL_DEPTH_TEST)
-    glEnable(GL_CULL_FACE)
-    glCullFace(GL_BACK)
-    glFrontFace(GL_CCW)
+    # glEnable(GL_DEPTH_TEST)
+    # glEnable(GL_CULL_FACE)
+    # glCullFace(GL_BACK)
+    # glFrontFace(GL_CCW)
     # initialize ImGui
     imgui = CImGui.CreateContext()
     @assert imgui != C_NULL "Failed to create ImGui context!"
@@ -173,7 +224,7 @@ function initApp(model)
     CImGui.ImGui_ImplGlfw_InitForOpenGL(window, true)
     CImGui.ImGui_ImplOpenGL3_Init(130)
     # camera
-    camera = Camera(pos=Vector3{Float32}(0.0, 0.0, -1.0), center=Vector3{Float32}(0.0, 0.0, 0.0))
+    camera = Camera(pos=Vector3{Float32}(0,0,-5), center=Vector3{Float32}(0,0,0))
     updateCamera!(camera)
     # create app
     app = Application(window, imgui, camera, model, Configs())
@@ -239,6 +290,42 @@ function destroyApp(app)
     CImGui.DestroyContext(app.imgui)
     GLFW.DestroyWindow(app.window)
     GLFW.Terminate()
+end
+
+function loadRenderData(app)
+    model = app.model
+    # load shaders
+    shaders = [
+        createShader(joinpath("shaders", "nolit.vert.glsl"), GL_VERTEX_SHADER, true),
+        createShader(joinpath("shaders", "nolit.frag.glsl"), GL_FRAGMENT_SHADER, true),
+        createShader(joinpath("shaders", "light.vert.glsl"), GL_VERTEX_SHADER, true),
+        createShader(joinpath("shaders", "light.frag.glsl"), GL_FRAGMENT_SHADER, true)
+    ]
+    pNolit = createShaderProgram(shaders[1:2])
+    pLight = createShaderProgram(shaders[3:4])
+    # prepare VAO, VBO, EBO
+    VAO::GLuint = 0
+    @c glGenVertexArrays(1, &VAO)
+    glBindVertexArray(VAO)
+    VBOs = [GLuint(0), GLuint(0)]
+    @c glGenBuffers(2, VBOs)
+    glBindBuffer(GL_ARRAY_BUFFER, VBOs[1])
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Vector3{Float32}) * length(model.vertices), model.vertices, GL_STATIC_DRAW)
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, Ptr{Cvoid}(0))
+    glBindBuffer(GL_ARRAY_BUFFER, VBOs[2])
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Vector3{Float32}) * length(model.normals), model.normals, GL_STATIC_DRAW)
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, Ptr{Cvoid}(0))
+    glEnableVertexAttribArray(0)
+    glEnableVertexAttribArray(1)
+    EBO::GLuint = 0
+    @c glGenBuffers(1, &EBO)
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO)
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(Vector3{UInt32}) * length(model.faces), model.faces, GL_STATIC_DRAW)
+    glBindVertexArray(0)
+    return RenderData(
+        VAO, VBOs, EBO, pNolit, pLight, Color3{Float32}(1,1,1),
+        Vector3{Float32}(0,0,0), Vector2{Float32}(0,1), false
+    )
 end
 
 main()
