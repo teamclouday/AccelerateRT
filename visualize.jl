@@ -60,8 +60,7 @@ end
 
 mutable struct RenderData
     VAO
-    VBOs
-    EBO
+    VBO
     pNolit # nolit shader program
     pLight # light shader program
     color::Color3 # model base color
@@ -85,16 +84,14 @@ function renderLoop(app, renderData)
         # render model
         mvp = computeProjection(app.camera.fov, app.camera.ratio, app.camera.near, app.camera.far) *
             computeView(app.camera.p_pos, app.camera.p_center, app.camera.p_up) *
-            computeScale(
-                computeRotation(computeTranslate(renderData.tTrans), renderData.tRotScale.x, Vector3{Float32}(0,1,0)),
+            computeScale(computeRotation(computeTranslate(renderData.tTrans), renderData.tRotScale.x, Vector3{Float32}(0,1,0)),
                 Vector3{Float32}(renderData.tRotScale.y, renderData.tRotScale.y, renderData.tRotScale.y))
         prog = renderData.enableLight ? renderData.pLight : renderData.pNolit
         glUseProgram(prog)
         glUniform3fv(glGetUniformLocation(prog, "baseColor"), 1, renderData.color)
         glUniformMatrix4fv(glGetUniformLocation(prog, "mvp"), 1, GL_FALSE, mvp)
         glBindVertexArray(renderData.VAO)
-        glDrawElements(GL_TRIANGLES, length(app.model.faces), GL_UNSIGNED_INT, Ptr{Cvoid}(0))
-        # glDrawArrays(GL_TRIANGLES, 0, 8)
+        glDrawArrays(GL_TRIANGLES, 0, app.model.vertexCount)
         glBindVertexArray(0)
         glUseProgram(0)
 
@@ -190,7 +187,7 @@ function renderUI(app, renderData)
         if CImGui.BeginTabItem("Model")
             CImGui.ColorEdit3("Color", renderData.color)
             CImGui.DragFloat3("Translation", renderData.tTrans, 0.001f0)
-            @c CImGui.DragFloat("Rotation", &renderData.tRotScale.x, 0.001f0)
+            @c CImGui.DragFloat("Rotation", &renderData.tRotScale.x, 0.1f0, -360.0f0, 360.0f0, "%.1f")
             @c CImGui.DragFloat("Scale", &renderData.tRotScale.y, 0.001f0, 0.001f0)
             @c CImGui.Checkbox("Enable Light", &renderData.enableLight)
             CImGui.EndTabItem()
@@ -213,10 +210,10 @@ function initApp(model)
     GLFW.MakeContextCurrent(window)
     GLFW.SwapInterval(1)
     # setup OpenGL
-    # glEnable(GL_DEPTH_TEST)
-    # glEnable(GL_CULL_FACE)
-    # glCullFace(GL_BACK)
-    # glFrontFace(GL_CCW)
+    glEnable(GL_DEPTH_TEST)
+    glEnable(GL_CULL_FACE)
+    glCullFace(GL_BACK)
+    glFrontFace(GL_CCW)
     # initialize ImGui
     imgui = CImGui.CreateContext()
     @assert imgui != C_NULL "Failed to create ImGui context!"
@@ -224,7 +221,7 @@ function initApp(model)
     CImGui.ImGui_ImplGlfw_InitForOpenGL(window, true)
     CImGui.ImGui_ImplOpenGL3_Init(130)
     # camera
-    camera = Camera(pos=Vector3{Float32}(0,0,-5), center=Vector3{Float32}(0,0,0))
+    camera = Camera(pos=Vector3{Float32}(0,4,4), center=Vector3{Float32}(0,0,0))
     updateCamera!(camera)
     # create app
     app = Application(window, imgui, camera, model, Configs())
@@ -256,8 +253,8 @@ function initApp(model)
             pos[1], pos[2] = pos[3], pos[4]
             pos[3], pos[4] = posX, posY
             processMouse!(app.camera,
-                convert(Float32, pos[3]-pos[1]),
-                convert(Float32, pos[4]-pos[2]),
+                convert(Float32, pos[1]-pos[3]),
+                convert(Float32, pos[2]-pos[4]),
                 app.configs.mouseDown[1],
                 app.configs.mouseDown[2])
         end
@@ -293,7 +290,7 @@ function destroyApp(app)
 end
 
 function loadRenderData(app)
-    model = app.model
+    model = computeModelRenderData(app.model)
     # load shaders
     shaders = [
         createShader(joinpath("shaders", "nolit.vert.glsl"), GL_VERTEX_SHADER, true),
@@ -307,24 +304,18 @@ function loadRenderData(app)
     VAO::GLuint = 0
     @c glGenVertexArrays(1, &VAO)
     glBindVertexArray(VAO)
-    VBOs = [GLuint(0), GLuint(0)]
-    @c glGenBuffers(2, VBOs)
-    glBindBuffer(GL_ARRAY_BUFFER, VBOs[1])
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Vector3{Float32}) * length(model.vertices), model.vertices, GL_STATIC_DRAW)
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, Ptr{Cvoid}(0))
-    glBindBuffer(GL_ARRAY_BUFFER, VBOs[2])
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Vector3{Float32}) * length(model.normals), model.normals, GL_STATIC_DRAW)
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, Ptr{Cvoid}(0))
+    VBO::GLuint = 0
+    @c glGenBuffers(1, &VBO)
+    glBindBuffer(GL_ARRAY_BUFFER, VBO)
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Float32) * length(model.vertices), model.vertices, GL_STATIC_DRAW)
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(Float32), Ptr{Cvoid}(0))
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(Float32), Ptr{Cvoid}(3 * sizeof(Float32)))
     glEnableVertexAttribArray(0)
     glEnableVertexAttribArray(1)
-    EBO::GLuint = 0
-    @c glGenBuffers(1, &EBO)
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO)
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(Vector3{UInt32}) * length(model.faces), model.faces, GL_STATIC_DRAW)
     glBindVertexArray(0)
     return RenderData(
-        VAO, VBOs, EBO, pNolit, pLight, Color3{Float32}(1,1,1),
-        Vector3{Float32}(0,0,0), Vector2{Float32}(0,1), false
+        VAO, VBO, pNolit, pLight, Color3{Float32}(1,1,1),
+        Vector3{Float32}(0,0,0), Vector2{Float32}(0,1), true
     )
 end
 

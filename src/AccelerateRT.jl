@@ -5,7 +5,7 @@ export Vector2, Vector3, Vector4, Color3, Color4,
     emptyMatrix4x4, identityMatrix4x4, computeNormal,
     computeProjection, computeView, computeTranslate,
     computeRotation, computeScale
-export ModelData, describeModel
+export ModelData, ModelRenderData, describeModel, computeModelRenderData
 export loadFileText, loadFileBinary, loadObjFile
 export Camera, updateCamera!, processMouse!, processWheel!, processKey!
 export createShader, createShaderProgram, glDebugCallbackC

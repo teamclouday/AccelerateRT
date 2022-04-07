@@ -4,3 +4,5 @@ All models are retrieved from [McGuire Computer Graphics Archive](https://casual
 ```
 Morgan McGuire, Computer Graphics Archive, July 2017 (https://casual-effects.com/data)
 ```
+
+Modified locally in Blender.

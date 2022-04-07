@@ -88,7 +88,7 @@ end
 
 function computeTranslate(mat::Matrix4x4{T}, t::Vector3{T})::Matrix4x4 where T<:DataType
     res = copy(mat)
-    res[:, 4] .= mat[:, 1] * t[1] + mat[:, 2] * t[2] + mat[:, 2] * t[2] + mat[:, 3]
+    res[:, 4] .= mat[:, 1] * t[1] + mat[:, 2] * t[2] + mat[:, 3] * t[3] + mat[:, 4]
     return res
 end
 
@@ -104,19 +104,19 @@ function computeRotation(mat::Matrix4x4{T}, angle::T, v::Vector3{T})::Matrix4x4 
     axis::Vector3{T} = normalize(v)
     temp::Vector3{T} = (T(1) - c) * axis
     rot = emptyMatrix3x3(T)
-    rot[:, 1] = [
+    rot[:, 1] .= [
     c + temp[1] * axis[1],
         temp[1] * axis[2] + s * axis[3],
         temp[1] * axis[3] - s * axis[2]
     ]
-    rot[:, 2] = [
+    rot[:, 2] .= [
         temp[2] * axis[1] - s * axis[3],
     c + temp[2] * axis[2],
         temp[2] * axis[3] + s * axis[1]
     ]
-    rot[:, 3] = [
+    rot[:, 3] .= [
         temp[3] * axis[1] + s * axis[2],
-        temp[3] * axis[2] - s * axis[3],
+        temp[3] * axis[2] - s * axis[1],
     c + temp[3] * axis[3]
     ]
     res = copy(mat)

@@ -25,8 +25,9 @@ function loadObjFile(path::String)
     source = split(loadFileText(path), '\n')
     # init vectors
     vertices = Vector3{Float32}[]
-    normals_temp = Vector3{Float32}[]
-    faces_temp = []
+    normals = Vector3{Float32}[]
+    facesV = Vector3{UInt32}[]
+    facesN = Vector3{UInt32}[]
     # start reading
     for line in source
         line = lowercase(strip(line))
@@ -47,69 +48,66 @@ function loadObjFile(path::String)
             push!(vertices, data)
         elseif type == "vn"
             data = Vector3([parse(Float32, val) for val in vals[1:3]])
-            push!(normals_temp, data)
+            push!(normals, data)
         elseif type == "f"
             freq = length(findall("/", vals[1]))
-            data = MVector{6, UInt32}(0,0,0,0,0,0)
+            dataV = Vector3{UInt32}(0,0,0)
+            dataN = Vector3{UInt32}(0,0,0)
             missingNormal = false
             if freq <= 1
                 raw = [abs(parse(Int32, split(val, '/')[1])) for val in vals[1:3]]
                 for (idx, val) in enumerate(raw)
-                    data[idx] = val
+                    dataV[idx] = val
                 end
                 missingNormal = true
             elseif freq == 2
                 raw = [split(val, '/') for val in vals[1:3]]
                 missingNormal = isempty(raw[1][3])
                 for (idx, val) in enumerate(raw)
-                    data[idx] = abs(parse(Int32, val[1]))
+                    dataV[idx] = abs(parse(Int32, val[1]))
                     if !missingNormal
-                        data[idx+3] = abs(parse(Int32, val[3]))
+                        dataN[idx] = abs(parse(Int32, val[3]))
                     end
                 end
             end
             if missingNormal
                 # compute normal
-                push!(normals_temp, computeNormal(
-                    vertices[data[1]],
-                    vertices[data[2]],
-                    vertices[data[3]]
+                push!(normals, computeNormal(
+                    vertices[dataV.x],
+                    vertices[dataV.y],
+                    vertices[dataV.z]
                 ))
-                nIdx = length(normals_temp)
-                data[4] = nIdx
-                data[5] = nIdx
-                data[6] = nIdx
+                nIdx = length(normals)
+                dataN.x = nIdx
+                dataN.y = nIdx
+                dataN.z = nIdx
             end
-            if sum(data) > 0
-                push!(faces_temp, data)
+            if sum(dataV) + sum(dataN) > 0
+                push!(facesV, dataV)
+                push!(facesN, dataN)
             end
         end
     end
     # make sure obj is not empty
     @assert !isempty(vertices) "Failed to load $path, no vertex data!"
-    # collect faces and normals in correct order
-    faces = Vector3{UInt32}[]
-    normals = Vector3{Float32}[]
-    if isempty(faces_temp)
-        for i in range(1, step=3, stop=length(vertices))
-            push!(faces, Vector3{UInt32}(i-1, i, i+1))
-            n = computeNormal(
-                vertices[i],
+    # make sure face is not empty
+    if isempty(facesV)
+        @assert mod(length(vertices), 3) == 0 "Failed to load $path, wrong number of vertices!"
+        normals = Vector3{Float32}[]
+        facesV = Vector3{UInt32}[]
+        facesN = Vector3{UInt32}[]
+        for i in range(1, length(vertices), step=3)
+            idx = div(i+2, 3)
+            push!(facesV, Vector3{UInt32}(idx, idx+1, idx+2))
+            push!(normals, computeNormal(
+                vertices[i+0],
                 vertices[i+1],
                 vertices[i+2]
-            )
-            push!(normals, n, n, n)
-        end
-    else
-        normals = Array{Vector3{Float32}, 1}(undef, length(vertices))
-        for face in faces_temp
-            ix, iy, iz = face[1], face[2], face[3]
-            ia, ib, ic = face[4], face[5], face[6]
-            push!(faces, Vector3{UInt32}(ix-1, iy-1, iz-1))
-            normals[ix] = normals_temp[ia]
-            normals[iy] = normals_temp[ib]
-            normals[iz] = normals_temp[ic]
+            ))
+            idx = length(normals)
+            push!(facesN, Vector3{UInt32}(idx, idx, idx))
         end
     end
-    return ModelData(path, vertices, normals, faces)
+    vertexCount = length(facesN) * 3
+    return ModelData(path, vertices, facesV, normals, facesN, vertexCount)
 end
