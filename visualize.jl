@@ -46,7 +46,7 @@ mutable struct Configs
         new(true, [false, false, false, false],
             [-1.0,0.0,0.0,0.0], [false, false],
             false, APPWIDTH, APPHEIGHT,
-            Color4{Float32}(0,0,0,1), false, false)
+            Color4{Float32}(0.2,0.2,0.2,1), false, false)
     end
 end
 
@@ -67,6 +67,7 @@ mutable struct RenderData
     tTrans::Vector3 # model translation
     tRotScale::Vector2 # model rotation (around Y axis) & scale
     enableLight
+    enableNormalColor # use normal as base color
 end
 
 function renderLoop(app, renderData)
@@ -82,14 +83,20 @@ function renderLoop(app, renderData)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         # render model
-        mvp = computeProjection(app.camera.fov, app.camera.ratio, app.camera.near, app.camera.far) *
-            computeView(app.camera.p_pos, app.camera.p_center, app.camera.p_up) *
-            computeScale(computeRotation(computeTranslate(renderData.tTrans), renderData.tRotScale.x, Vector3{Float32}(0,1,0)),
-                Vector3{Float32}(renderData.tRotScale.y, renderData.tRotScale.y, renderData.tRotScale.y))
+        matProj = computeProjection(app.camera.fov, app.camera.ratio, app.camera.near, app.camera.far)
+        matView = computeView(app.camera.p_pos, app.camera.p_center, app.camera.p_up)
+        matModel = computeScale(computeRotation(computeTranslate(renderData.tTrans), renderData.tRotScale.x, Vector3{Float32}(0,1,0)),
+            Vector3{Float32}(renderData.tRotScale.y, renderData.tRotScale.y, renderData.tRotScale.y))
+        matNormal = inv(matModel)'
+            
         prog = renderData.enableLight ? renderData.pLight : renderData.pNolit
         glUseProgram(prog)
         glUniform3fv(glGetUniformLocation(prog, "baseColor"), 1, renderData.color)
-        glUniformMatrix4fv(glGetUniformLocation(prog, "mvp"), 1, GL_FALSE, mvp)
+        glUniform3fv(glGetUniformLocation(prog, "viewPos"), 1, app.camera.p_pos)
+        glUniformMatrix4fv(glGetUniformLocation(prog, "mProjView"), 1, GL_FALSE, matProj * matView)
+        glUniformMatrix4fv(glGetUniformLocation(prog, "mModel"), 1, GL_FALSE, matModel)
+        glUniformMatrix4fv(glGetUniformLocation(prog, "mNormal"), 1, GL_FALSE, matNormal)
+        glUniform1f(glGetUniformLocation(prog, "useNormalColor"), renderData.enableNormalColor ? 1.0 : 0.0)
         glBindVertexArray(renderData.VAO)
         glDrawArrays(GL_TRIANGLES, 0, app.model.vertexCount)
         glBindVertexArray(0)
@@ -181,11 +188,16 @@ function renderUI(app, renderData)
             CImGui.EndTabItem()
         end
         if CImGui.BeginTabItem("Model")
+            model = app.model
             CImGui.ColorEdit3("Color", renderData.color)
             CImGui.DragFloat3("Translation", renderData.tTrans, 0.001f0)
             @c CImGui.DragFloat("Rotation", &renderData.tRotScale.x, 0.1f0, -360.0f0, 360.0f0, "%.1f")
             @c CImGui.DragFloat("Scale", &renderData.tRotScale.y, 0.001f0, 0.001f0)
             @c CImGui.Checkbox("Enable Light", &renderData.enableLight)
+            @c CImGui.Checkbox("Show Normal", &renderData.enableNormalColor)
+            CImGui.Separator()
+            CImGui.Text(@sprintf("Number of vertices: %d", length(model.vertices)))
+            CImGui.Text(@sprintf("Number of faces: %d", length(model.facesV)))
             CImGui.EndTabItem()
         end
         CImGui.EndTabBar()
@@ -200,6 +212,7 @@ function initApp(model)
     GLFW.WindowHint(GLFW.CONTEXT_VERSION_MAJOR, 3)
     GLFW.WindowHint(GLFW.CONTEXT_VERSION_MINOR, 3)
     GLFW.WindowHint(GLFW.OPENGL_PROFILE, GLFW.OPENGL_CORE_PROFILE)
+    GLFW.WindowHint(GLFW.SAMPLES, 4)
     # create window
     window = GLFW.CreateWindow(APPWIDTH, APPHEIGHT, APPNAME)
     @assert window != C_NULL "Failed to create GLFW window!"
@@ -210,6 +223,7 @@ function initApp(model)
     glEnable(GL_CULL_FACE)
     glCullFace(GL_BACK)
     glFrontFace(GL_CCW)
+    glEnable(GL_MULTISAMPLE)
     # initialize ImGui
     imgui = CImGui.CreateContext()
     @assert imgui != C_NULL "Failed to create ImGui context!"
@@ -311,8 +325,7 @@ function loadRenderData(app)
     glBindVertexArray(0)
     return RenderData(
         VAO, VBO, pNolit, pLight, Color3{Float32}(1,1,1),
-        Vector3{Float32}(0,0,0), Vector2{Float32}(0,1), true
-    )
+        Vector3{Float32}(0,0,0), Vector2{Float32}(0,1), true, false)
 end
 
 main()
