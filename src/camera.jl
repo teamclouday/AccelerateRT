@@ -20,7 +20,7 @@ mutable struct Camera
     p_front::Vector3
     p_center::Vector3
     Camera(;pos::Vector3, center::Vector3) = begin
-        new(45.0, 0.1, 1000.0, 0.1, 0.1, 0.0, 1.0, true,
+        new(45.0, 0.1, 1000.0, 0.1, 1.0, 0.0, 1.0, true,
             pos, Vector3{Float32}(0.0, 1.0, 0.0),
             Vector3{Float32}(0.0, 0.0, 0.0),
             Vector3{Float32}(0.0, 0.0, 0.0), center)
@@ -59,8 +59,8 @@ function processMouse!(camera::Camera, deltaX::Float32, deltaY::Float32, left::B
         v1 .= v2 + dir * camera.dist
     end
     if right
-        dX = deltaX * camera.sensMove * 0.001f0
-        dY = deltaY * camera.sensMove * 0.001f0
+        dX = -deltaX * camera.sensMove * 0.001f0
+        dY = -deltaY * camera.sensMove * 0.001f0
         trans = computeTranslate(dY * camera.p_up) * computeTranslate(-dX * camera.p_right)
         camera.p_center = Vector3{Float32}((trans * Vector4{Float32}(camera.p_center..., 1))[1:3]...)
         camera.p_pos    = Vector3{Float32}((trans * Vector4{Float32}(camera.p_pos..., 1))[1:3]...)

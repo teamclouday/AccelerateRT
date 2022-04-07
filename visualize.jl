@@ -102,11 +102,7 @@ function renderLoop(app, renderData)
             app.configs.imguiFocus = CImGui.IsWindowFocused(CImGui.ImGuiFocusedFlags_AnyWindow)
             app.camera.ratio = app.configs.winW / convert(Float32, app.configs.winH)
             framerate = convert(Float32, CImGui.GetIO().Framerate)
-            delta = if iszero(framerate)
-                app.camera.sensMove / framerate
-            else
-                0.1f0 * app.camera.sensMove
-            end
+            delta = !iszero(framerate) ? app.camera.sensMove / framerate * 100.0f0 : app.camera.sensMove
             deltaFront = delta * app.configs.keyDown[1] - delta * app.configs.keyDown[3]
             deltaRight = delta * app.configs.keyDown[4] - delta * app.configs.keyDown[2]
             processKey!(app.camera, delta * deltaFront, delta * deltaRight)
@@ -174,7 +170,7 @@ function renderUI(app, renderData)
             CImGui.SetNextTreeNodeOpen(false, CImGui.ImGuiCond_FirstUseEver)
             if CImGui.CollapsingHeader("Sensitivity")
                 @c CImGui.DragFloat("Rotate", &cam.sensTurn, 0.001f0, 0.001f0, 1.0f0, "%.3f")
-                @c CImGui.DragFloat("Move", &cam.sensTurn, 0.001f0, 0.001f0, 1.0f0, "%.3f")
+                @c CImGui.DragFloat("Move", &cam.sensMove, 0.001f0, 0.001f0, 1.0f0, "%.3f")
             end
             if CImGui.CollapsingHeader("Additional Info")
                 CImGui.Text(@sprintf("Front: (%.2f, %.2f, %.2f)", cam.p_front.x, cam.p_front.y, cam.p_front.z))
@@ -235,13 +231,13 @@ function initApp(model)
             end
         end
         if key == GLFW.KEY_W
-            app.configs.keyDown[1] = action == GLFW.PRESS
+            app.configs.keyDown[1] = action != GLFW.RELEASE
         elseif key == GLFW.KEY_A
-            app.configs.keyDown[2] = action == GLFW.PRESS
+            app.configs.keyDown[2] = action != GLFW.RELEASE
         elseif key == GLFW.KEY_S
-            app.configs.keyDown[3] = action == GLFW.PRESS
+            app.configs.keyDown[3] = action != GLFW.RELEASE
         elseif key == GLFW.KEY_D
-            app.configs.keyDown[4] = action == GLFW.PRESS
+            app.configs.keyDown[4] = action != GLFW.RELEASE
         end
     end)
     GLFW.SetCursorPosCallback(window, (_, posX, posY) -> begin
