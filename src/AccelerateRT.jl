@@ -9,6 +9,7 @@ export ModelData, ModelRenderData, describeModel, computeModelRenderData
 export loadFileText, loadFileBinary, loadObjFile
 export Camera, updateCamera!, processMouse!, processWheel!, processKey!
 export createShader, createShaderProgram, glDebugCallbackC
+export BVH
 
 include("math.jl")
 include("model.jl")
