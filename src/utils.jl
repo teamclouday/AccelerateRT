@@ -23,13 +23,13 @@ function createShader(source, type, isPath=false)
         source = loadFileText(source)
     end
     shader = glCreateShader(type)
-    @assert shader != 0 "Failed to create shader!"
+    @assert shader != 0 "[createShader] Failed to create shader!"
     glShaderSource(shader, 1, convert(Ptr{UInt8}, pointer([convert(Ptr{GLchar}, pointer(source))])), C_NULL)
     glCompileShader(shader)
     success::GLint = 0
     @c glGetShaderiv(shader, GL_COMPILE_STATUS, &success)
     if success != GL_TRUE
-        error("Failed to create shader!\n$source\n", getShaderInfo(shader))
+        error("[createShader] Failed to create shader!\n$source\n", getShaderInfo(shader))
         glDeleteShader(shader)
     end
     return shader
@@ -37,7 +37,7 @@ end
 
 function createShaderProgram(shaders::AbstractArray)
     prog = glCreateProgram()
-    @assert prog != 0 "Failed to create shader program!"
+    @assert prog != 0 "[createShaderProgram] Failed to create shader program!"
     for shader in shaders
         glAttachShader(prog, shader)
     end
@@ -45,7 +45,7 @@ function createShaderProgram(shaders::AbstractArray)
     success::GLint = 0
     @c glGetProgramiv(prog, GL_LINK_STATUS, &success)
     if success != GL_TRUE
-        error("Failed to create shader program!\n", getShaderInfo(prog))
+        error("[createShaderProgram] Failed to create shader program!\n", getShaderInfo(prog))
         glDeleteProgram(prog)
     end
     return prog

@@ -1,12 +1,10 @@
 module AccelerateRT
 
-export Vector2, Vector3, Vector4, Color3, Color4,
-    Matrix3x3, Matrix4x4, emptyMatrix3x3, identityMatrix3x3,
-    emptyMatrix4x4, identityMatrix4x4, computeNormal,
-    computeProjection, computeView, computeTranslate,
-    computeRotation, computeScale
+export DataType, Vector2, Vector3, Vector4, Color3, Color4,
+    Matrix3x3, Matrix4x4, computeNormal, computeProjection,
+    computeView, computeTranslate, computeRotation, computeScale
 export ModelData, ModelRenderData, describeModel, computeModelRenderData
-export loadFileText, loadFileBinary, loadObjFile
+export loadFileText, loadFileBinary, loadObjFile, saveFileBinary
 export Camera, updateCamera!, processMouse!, processWheel!, processKey!
 export createShader, createShaderProgram, glDebugCallbackC
 export BVH

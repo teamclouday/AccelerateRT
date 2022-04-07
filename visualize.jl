@@ -85,8 +85,10 @@ function renderLoop(app, renderData)
         # render model
         matProj = computeProjection(app.camera.fov, app.camera.ratio, app.camera.near, app.camera.far)
         matView = computeView(app.camera.p_pos, app.camera.p_center, app.camera.p_up)
-        matModel = computeScale(computeRotation(computeTranslate(renderData.tTrans), renderData.tRotScale.x, Vector3{Float32}(0,1,0)),
-            Vector3{Float32}(renderData.tRotScale.y, renderData.tRotScale.y, renderData.tRotScale.y))
+        matModel = computeScale(
+                computeRotation(computeTranslate(renderData.tTrans),
+                renderData.tRotScale.x, Vector3{Float32}(0,1,0)),
+            Vector3(renderData.tRotScale.y))
         matNormal = inv(matModel)'
             
         prog = renderData.enableLight ? renderData.pLight : renderData.pNolit
@@ -165,7 +167,7 @@ function renderUI(app, renderData)
             @c CImGui.Checkbox("Lock Center", &cam.lockCenter)
             CImGui.SameLine()
             if CImGui.Button("Center To Origin")
-                cam.p_center = [0f0,0f0,0f0]
+                cam.p_center .= Vector3(Float32(0))
                 updateCamera!(cam)
             end
             CImGui.SetNextTreeNodeOpen(false, CImGui.ImGuiCond_FirstUseEver)
@@ -231,7 +233,7 @@ function initApp(model)
     CImGui.ImGui_ImplGlfw_InitForOpenGL(window, true)
     CImGui.ImGui_ImplOpenGL3_Init(130)
     # camera
-    camera = Camera(pos=Vector3{Float32}(0,4,4), center=Vector3{Float32}(0,0,0))
+    camera = Camera(pos=Vector3{Float32}(0,4,4), center=Vector3(Float32(0)))
     updateCamera!(camera)
     # create app
     app = Application(window, imgui, camera, model, Configs())
@@ -324,8 +326,8 @@ function loadRenderData(app)
     glEnableVertexAttribArray(1)
     glBindVertexArray(0)
     return RenderData(
-        VAO, VBO, pNolit, pLight, Color3{Float32}(1,1,1),
-        Vector3{Float32}(0,0,0), Vector2{Float32}(0,1), true, false)
+        VAO, VBO, pNolit, pLight, Color3(Float32(1)),
+        Vector3(Float32(0)), Vector2{Float32}(0,1), true, false)
 end
 
 main()

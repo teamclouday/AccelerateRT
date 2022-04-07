@@ -1,11 +1,11 @@
 # manipulate files
 
-using BSON
+using BSON: @save, @load
 using StaticArrays: MVector
 using .AccelerateRT: Vector3, computeNormal
 
 function loadFileText(path::String)::String
-    @assert isfile(path) "Failed to load $path, not a file!"
+    @assert isfile(path) "[loadFileText] Failed to load $path, not a file!"
     res= ""
     open(path, "r") do io
         res = read(io, String)
@@ -14,12 +14,21 @@ function loadFileText(path::String)::String
 end
 
 function loadFileBinary(path::String)
-    @assert isfile(path) "Failed to load $path, not a file!"
+    @assert isfile(path) "[loadFileBinary] Failed to load $path, not a file!"
+    @load path data
+    return data
+end
 
+function saveFileBinary(path::String, data)
+    if ispath(path)
+        println("[saveFileBinary] Warning: overwritting $(path)!")
+    end
+    mkpath(dirname(path))
+    @save path data
 end
 
 function loadObjFile(path::String)
-    @assert isfile(path) "Failed to load $path, not a file!"
+    @assert isfile(path) "[loadObjFile] Failed to load $path, not a file!"
     @assert lowercase(splitext(path)[2]) == ".obj"
     # read source
     source = split(loadFileText(path), '\n')
@@ -89,10 +98,10 @@ function loadObjFile(path::String)
         end
     end
     # make sure obj is not empty
-    @assert !isempty(vertices) "Failed to load $path, no vertex data!"
+    @assert !isempty(vertices) "[loadObjFile] Failed to load $path, no vertex data!"
     # make sure face is not empty
     if isempty(facesV)
-        @assert mod(length(vertices), 3) == 0 "Failed to load $path, wrong number of vertices!"
+        @assert mod(length(vertices), 3) == 0 "[loadObjFile] Failed to load $path, wrong number of vertices!"
         normals = Vector3{Float32}[]
         facesV = Vector3{UInt32}[]
         facesN = Vector3{UInt32}[]

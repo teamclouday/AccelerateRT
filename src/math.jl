@@ -13,35 +13,19 @@ const Color4{DataType} = MVector{4, DataType}
 const Matrix3x3{DataType} = MMatrix{3, 3, DataType}
 const Matrix4x4{DataType} = MMatrix{4, 4, DataType}
 
-function emptyMatrix3x3(type)::Matrix3x3
-    return Matrix3x3{type}(
-        0,0,0,
-        0,0,0,
-        0,0,0)
-end
+@inline Vector2(val::T) where {T<:DataType} = Vector2{T}(val, val)
+@inline Vector3(val::T) where {T<:DataType} = Vector3{T}(val, val, val)
+@inline Vector4(val::T) where {T<:DataType} = Vector4{T}(val, val, val, val)
+@inline Color3(val::T) where {T<:DataType} = Color3{T}(val, val, val)
+@inline Color4(val::T) where {T<:DataType} = Color4{T}(val, val, val, val)
+@inline Matrix3x3(val::T) where {T<:DataType} = Matrix3x3{T}(val,0,0, 0,val,0, 0,0,val)
+@inline Matrix4x4(val::T) where {T<:DataType} = Matrix4x4{T}(val,0,0,0, 0,val,0,0, 0,0,val,0, 0,0,0,val)
 
-function identityMatrix3x3(type)::Matrix3x3
-    return Matrix3x3{type}(
-        1,0,0,
-        0,1,0,
-        0,0,1)
-end
-
-function emptyMatrix4x4(type)::Matrix4x4
-    return Matrix4x4{type}(
-        0,0,0,0,
-        0,0,0,0,
-        0,0,0,0,
-        0,0,0,0)
-end
-
-function identityMatrix4x4(type)::Matrix4x4
-    return Matrix4x4{type}(
-        1,0,0,0,
-        0,1,0,0,
-        0,0,1,0,
-        0,0,0,1)
-end
+Base.show(io::IO, v::Vector2) = print(io, "<$(v.x),$(v.y)>")
+Base.show(io::IO, v::Vector3) = print(io, "<$(v.x),$(v.y),$(v.z)>")
+Base.show(io::IO, v::Vector4) = print(io, "<$(v.x),$(v.y),$(v.z),$(v.w)>")
+Base.show(io::IO, v::Color3) = print(io, "<$(v.x),$(v.y),$(v.z)>")
+Base.show(io::IO, v::Color4) = print(io, "<$(v.x),$(v.y),$(v.z),$(v.w)>")
 
 function computeNormal(v1::Vector3, v2::Vector3, v3::Vector3)::Vector3
     dir = cross(v2 - v1, v3 - v1)
@@ -57,7 +41,7 @@ function computeProjection(fov::T, ratio::T, near::T, far::T)::Matrix4x4 where T
     right::T = r * ratio
     bottom::T = -r
     top::T = r
-    mat = emptyMatrix4x4(T)
+    mat = Matrix4x4(T(0))
     mat[1,1] = (T(2) * near) / (right - left)
     mat[2,2] = (T(2) * near) / (top - bottom)
     mat[3,3] = (far + near) / (near - far)
@@ -71,7 +55,7 @@ function computeView(eye::Vector3{T}, center::Vector3{T}, up::Vector3{T})::Matri
     u::Vector3{T} = normalize(up)
     s::Vector3{T} = normalize(cross(f, u))
     u .= cross(s, f)
-    res = identityMatrix4x4(T)
+    res = Matrix4x4(T(1))
     res[1,1:3] .= s
     res[2,1:3] .= u
     res[3,1:3] .= -f
@@ -82,7 +66,7 @@ function computeView(eye::Vector3{T}, center::Vector3{T}, up::Vector3{T})::Matri
 end
 
 function computeTranslate(t::Vector3{T})::Matrix4x4 where T<:DataType
-    mat = identityMatrix4x4(T)
+    mat = Matrix4x4(T(1))
     return computeTranslate(mat, t)
 end
 
@@ -93,7 +77,7 @@ function computeTranslate(mat::Matrix4x4{T}, t::Vector3{T})::Matrix4x4 where T<:
 end
 
 function computeRotation(angle::T, v::Vector3{T})::Matrix4x4 where T<:DataType
-    mat = identityMatrix4x4(T)
+    mat = Matrix4x4(T(1))
     return computeRotation(mat, angle, v)
 end
 
@@ -103,7 +87,7 @@ function computeRotation(mat::Matrix4x4{T}, angle::T, v::Vector3{T})::Matrix4x4 
     s::T = sin(a)
     axis::Vector3{T} = normalize(v)
     temp::Vector3{T} = (T(1) - c) * axis
-    rot = emptyMatrix3x3(T)
+    rot = Matrix3x3(T(0))
     rot[:, 1] .= [
     c + temp[1] * axis[1],
         temp[1] * axis[2] + s * axis[3],
@@ -127,7 +111,7 @@ function computeRotation(mat::Matrix4x4{T}, angle::T, v::Vector3{T})::Matrix4x4 
 end
 
 function computeScale(s::Vector3{T})::Matrix4x4 where T<:DataType
-    mat = identityMatrix4x4(T)
+    mat = Matrix4x4(T(1))
     return computeScale(mat, s)
 end
 
