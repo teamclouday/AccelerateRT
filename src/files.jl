@@ -1,6 +1,6 @@
 # manipulate files
 
-using BSON: @save, @load
+using JLD2: save, load
 using StaticArrays: MVector
 using .AccelerateRT: Vector3, computeNormal
 
@@ -15,8 +15,7 @@ end
 
 function loadFileBinary(path::String)
     @assert isfile(path) "[loadFileBinary] Failed to load $path, not a file!"
-    @load path data
-    return data
+    return load(path)
 end
 
 function saveFileBinary(path::String, data)
@@ -24,7 +23,7 @@ function saveFileBinary(path::String, data)
         println("[saveFileBinary] Warning: overwritting $(path)!")
     end
     mkpath(dirname(path))
-    @save path data
+    save(path, data)
 end
 
 function loadObjFile(path::String)

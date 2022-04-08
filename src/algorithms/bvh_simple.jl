@@ -3,11 +3,12 @@
 using .BVH: AABB, combineAABB!, BVHNode, BVHPrimitive
 using ..AccelerateRT: ModelData, Vector3, DataType
 
-function constructBVHSimple(
+function constructBVHSimple!(
     primitives::AbstractVector{BVHPrimitive{T, K}},
+    orderedPrimitives::AbstractVector{BVHPrimitive{T, K}},
     idxBegin::Integer, idxEnd::Integer, criteria::Symbol
 )::BVHNode where {T<:DataType, K<:DataType}
-    @assert idxBegin <= idxEnd "[constructBVHSimple] Failed to construct BVHSimple!"
+    @assert idxBegin <= idxEnd "[constructBVHSimple!] Failed to construct BVHSimple!"
     # step1: compute total bounds and centroid bounds
     boundsAll = AABB{T}()
     boundsCentroid = AABB{T}()
@@ -18,14 +19,18 @@ function constructBVHSimple(
     # step2: check if only one face left
     if idxEnd - idxBegin == 0
         # in this case, initialize as a leaf node
-        return BVHNode{T}(boundsAll, primitives[idxBegin:idxEnd], [])
+        primStart = length(orderedPrimitives) + 1
+        push!(orderedPrimitives, primitives[idxBegin:idxEnd]...)
+        return BVHNode{T}(boundsAll, primStart, length(orderedPrimitives), [])
     end
     # step3: select split dimension by the maximum extent
     splitDim = argmax(boundsCentroid.pMax - boundsCentroid.pMin)
     # step4: check if split dimension extent is zero
     if boundsCentroid.pMax[splitDim] == boundsCentroid.pMin[splitDim]
         # in this case, initialize as a leaf node
-        return BVHNode{T}(boundsAll, primitives[idxBegin:idxEnd], [])
+        primStart = length(orderedPrimitives) + 1
+        push!(orderedPrimitives, primitives[idxBegin:idxEnd]...)
+        return BVHNode{T}(boundsAll, primStart, length(orderedPrimitives), [])
     end
     # step5: partition faces
     mid = idxBegin
@@ -45,17 +50,19 @@ function constructBVHSimple(
         # mid = 0 if split failed
         mid = searchsortedlast(map(mapFunc, view(primitives, idxBegin:idxEnd)), false)
     else
-        error("[constructBVHSimple] Failed to construct BVHSimple, unrecognized criteria $(criteria)!")
+        error("[constructBVHSimple!] Failed to construct BVHSimple, unrecognized criteria $(criteria)!")
     end
     # step6: check success partition
     if mid < idxBegin
-        println("[constructBVHSimple] Warning: $(criteria) failed to partition nodes in ($idxBegin,$idxEnd)!")
+        println("[constructBVHSimple!] Warning: $(criteria) failed to partition nodes in ($idxBegin,$idxEnd)!")
         # if partition failed, create leaf node
-        return BVHNode{T}(boundsAll, primitives[idxBegin:idxEnd], [])
+        primStart = length(orderedPrimitives) + 1
+        push!(orderedPrimitives, primitives[idxBegin:idxEnd]...)
+        return BVHNode{T}(boundsAll, primStart, length(orderedPrimitives), [])
     end
     # step7: recursion
-    return BVHNode{T}(boundsAll, [], [
-        constructBVHSimple(primitives, idxBegin, mid, criteria), # left node
-        constructBVHSimple(primitives, mid+1, idxEnd, criteria)  # right node
+    return BVHNode{T}(boundsAll, 0, 0, [
+        constructBVHSimple!(primitives, orderedPrimitives, idxBegin, mid, criteria), # left node
+        constructBVHSimple!(primitives, orderedPrimitives, mid+1, idxEnd, criteria)  # right node
     ])
 end

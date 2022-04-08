@@ -20,7 +20,8 @@ Base.show(io::IO, x::BVHPrimitive) = print(io, "$(x.face)")
 
 mutable struct BVHNode{T<:DataType}
     bounds::AABB{T}
-    prim::AbstractVector{BVHPrimitive}
+    primBegin::UInt32
+    primEnd::UInt32
     children::AbstractVector{BVHNode{T}}
 end
 
@@ -79,14 +80,31 @@ function BVHPrimitive(face::Vector3{K}, vertices::AbstractVector{Vector3{T}}) wh
     )
 end
 
-function displayBVH(bvh::BVHNode, depth=0)
+function displayBVH(bvh::BVHNode, depth=1)
     prev = '~'^depth
-    print("$(prev)($depth)AABB: [$(bvh.bounds.pMin),$(bvh.bounds.pMax)]; Primitives: [ ")
-    for p in bvh.prim
-        print(p, " ")
-    end
-    println("]")
+    println("$(prev)($depth)AABB: [$(bvh.bounds.pMin),$(bvh.bounds.pMax)]; Primitives: [$(bvh.primBegin),$(bvh.primEnd)]")
     for child in bvh.children
         displayBVH(child, depth+1)
     end
+end
+
+function describeBVH(bvh::BVHNode)
+    data = [0,0,typemax(Int),0] # [node count, leaf count, min depth, max depth]
+    function traverse(bvh::BVHNode, depth, data)
+        data[1] += 1
+        data[4] = max(data[4], depth)
+        if isempty(bvh.children)
+            data[2] += 1
+            data[3] = min(data[3], depth)
+        else
+            for child in bvh.children
+                traverse(child, depth+1, data)
+            end
+        end
+    end
+    traverse(bvh, 1, data)
+    println("Number of Nodes: $(data[1])")
+    println("Number of Leaves: $(data[2])")
+    println("Min Depth: $(data[3])")
+    println("Max Depth: $(data[4])")
 end

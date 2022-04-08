@@ -1,6 +1,6 @@
 # construct BVH and export to binary file
 
-using ArgParse, StaticArrays
+using ArgParse
 
 include("src/AccelerateRT.jl")
 using .AccelerateRT
@@ -20,6 +20,9 @@ function parseCommandline()
         "--skip"
             help = "skip existing structure"
             action = :store_true
+        "--show"
+            help = "print structure"
+            action = :store_true
         "model"
             help = "obj model path"
             required = true
@@ -35,40 +38,51 @@ function main()
     bvhPath = joinpath("structures", replace(strip(modelPath), r"[^a-zA-Z0-9]" => "_"))
     bvh = nothing
     if args["algMiddle"]
-        ext = ".middle.bson"
+        ext = ".middle.jld2"
         path = bvhPath * ext
+        ordered = nothing
         if args["skip"] && isfile(path)
             println("Loading existing $path")
-            bvh = loadFileBinary(path)
+            data = loadFileBinary(path)
+            bvh = data["BVH"]
+            ordered = data["Ordered"]
         else
             println("Constructing BVHSimple with middle criteria")
             primitives = createPrimitives(model)
-            bvh = BVH.constructBVHSimple(primitives, 1, length(primitives), :middle)
+            ordered = BVH.BVHPrimitive{Float32, UInt32}[]
+            bvh = BVH.constructBVHSimple!(primitives, ordered, 1, length(primitives), :middle)
         end
         if args["save"]
             println("Saving to $path")
-            saveFileBinary(path, bvh)
+            saveFileBinary(path, Dict("BVH" => bvh, "Ordered" => ordered, "Vertices" => model.vertices))
         end
     elseif args["algMedian"]
-        ext = ".median.bson"
+        ext = ".median.jld2"
         path = bvhPath * ext
+        ordered = nothing
         if args["skip"] && isfile(path)
             println("Loading existing $path")
-            bvh = loadFileBinary(path)
+            data = loadFileBinary(path)
+            bvh = data["BVH"]
+            ordered = data["Ordered"]
         else
             println("Constructing BVHSimple with median criteria")
             primitives = createPrimitives(model)
-            bvh = BVH.constructBVHSimple(primitives, 1, length(primitives), :median)
+            ordered = BVH.BVHPrimitive{Float32, UInt32}[]
+            bvh = BVH.constructBVHSimple!(primitives, ordered, 1, length(primitives), :median)
         end
         if args["save"]
             println("Saving to $path")
-            saveFileBinary(path, bvh)
+            saveFileBinary(path, Dict("BVH" => bvh, "Ordered" => ordered, "Vertices" => model.vertices))
         end
     end
-    if bvh !== nothing
+    if bvh !== nothing && args["show"]
+        println("==============")
         println("BVH Structure:")
         BVH.displayBVH(bvh)
+        println("==============")
     end
+    BVH.describeBVH(bvh)
 end
 
 function createPrimitives(model::ModelData)
