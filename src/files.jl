@@ -101,21 +101,20 @@ function loadObjFile(path::String)
     # make sure face is not empty
     if isempty(facesV)
         @assert mod(length(vertices), 3) == 0 "[loadObjFile] Failed to load $path, wrong number of vertices!"
-        normals = Vector3{Float32}[]
-        facesV = Vector3{UInt32}[]
-        facesN = Vector3{UInt32}[]
+        println("[loadObjFile] Warning: no face info, recomputing!")
+        size = div(length(vertices), 3)
+        normals = Vector{Vector3{Float32}}(undef, size)
+        facesV = Vector{Vector3{UInt32}}(undef, size)
+        facesN = Vector{Vector3{UInt32}}(undef, size)
         for i in range(1, length(vertices), step=3)
             idx = div(i+2, 3)
-            push!(facesV, Vector3{UInt32}(idx, idx+1, idx+2))
-            push!(normals, computeNormal(
+            facesV[idx] = Vector3{UInt32}(i, i+1, i+2)
+            normals[idx] = computeNormal(
                 vertices[i+0],
                 vertices[i+1],
-                vertices[i+2]
-            ))
-            idx = length(normals)
-            push!(facesN, Vector3{UInt32}(idx, idx, idx))
+                vertices[i+2])
+            facesN[idx] = Vector3{UInt32}(idx, idx, idx)
         end
     end
-    vertexCount = length(facesN) * 3
-    return ModelData(path, vertices, facesV, normals, facesN, vertexCount)
+    return ModelData(path, vertices, facesV, normals, facesN)
 end

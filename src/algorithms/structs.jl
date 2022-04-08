@@ -29,6 +29,22 @@ mutable struct BVHNodeFlatten{T<:DataType}
 
 end
 
+function Base.min(v1::Vector3{T}, v2::Vector3{T})::Vector3 where T<:DataType
+    return Vector3{T}(
+        min(v1.x, v2.x),
+        min(v1.y, v2.y),
+        min(v1.z, v2.z)
+    )
+end
+
+function Base.max(v1::Vector3{T}, v2::Vector3{T})::Vector3 where T<:DataType
+    return Vector3{T}(
+        max(v1.x, v2.x),
+        max(v1.y, v2.y),
+        max(v1.z, v2.z)
+    )
+end
+
 function AABB{T}() where T<:DataType
     pMax = Vector3{T}(typemin(T), typemin(T), typemin(T))
     pMin = Vector3{T}(typemax(T), typemax(T), typemax(T))
@@ -36,8 +52,8 @@ function AABB{T}() where T<:DataType
 end
 
 function AABB(v1::Vector3{T}, v2::Vector3{T}, v3::Vector3{T}) where T<:DataType
-    pMin = min(v1, v2, v3)
-    pMax = max(v1, v2, v3)
+    pMin = min(v1, min(v2, v3))
+    pMax = max(v1, max(v2, v3))
     return AABB{T}(pMin, pMax)
 end
 
@@ -66,7 +82,7 @@ end
 function computeCentroid(b::AABB{T})::Vector3 where T<:DataType
     extent = b.pMin + b.pMax
     if isnan(sum(extent)) || isinf(sum(extent))
-        extent = Vector3{T}(0,0,0)
+        extent .= Vector3{T}(0,0,0)
     end
     return extent * T(0.5)
 end
@@ -90,7 +106,7 @@ end
 
 function describeBVH(bvh::BVHNode)
     data = [0,0,typemax(Int),0] # [node count, leaf count, min depth, max depth]
-    function traverse(bvh::BVHNode, depth, data)
+    function traverse(bvh::BVHNode, depth)
         data[1] += 1
         data[4] = max(data[4], depth)
         if isempty(bvh.children)
@@ -98,11 +114,11 @@ function describeBVH(bvh::BVHNode)
             data[3] = min(data[3], depth)
         else
             for child in bvh.children
-                traverse(child, depth+1, data)
+                traverse(child, depth+1)
             end
         end
     end
-    traverse(bvh, 1, data)
+    traverse(bvh, 1)
     println("Number of Nodes: $(data[1])")
     println("Number of Leaves: $(data[2])")
     println("Min Depth: $(data[3])")

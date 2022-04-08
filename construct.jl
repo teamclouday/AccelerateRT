@@ -86,11 +86,12 @@ function main()
 end
 
 function createPrimitives(model::ModelData)
-    primitives = BVH.BVHPrimitive{Float32, UInt32}[]
-    for face in model.facesV
+    primitives = Vector{BVH.BVHPrimitive{Float32, UInt32}}(undef, length(model.facesV))
+    for idx in range(1, length(model.facesV))
+        face = model.facesV[idx]
         bounds = BVH.AABB(model.vertices[face.x], model.vertices[face.y], model.vertices[face.z])
         centroid = BVH.computeCentroid(bounds)
-        push!(primitives, BVH.BVHPrimitive{Float32, UInt32}(face, bounds, centroid))
+        primitives[idx] = BVH.BVHPrimitive{Float32, UInt32}(face, bounds, centroid)
     end
     return primitives
 end

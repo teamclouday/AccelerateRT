@@ -13,6 +13,8 @@ const APPHEIGHT = 600
 function parseCommandline()
     s = ArgParseSettings()
     @add_arg_table! s begin
+        "--bvh"
+            help = "constructed BVH path"
         "model"
             help = "obj model path"
             required = true
@@ -25,9 +27,14 @@ function main()
     modelPath = args["model"]
     model = loadObjFile(modelPath)
     describeModel(model)
-    app = initApp(model)
-    renderData = loadRenderData(app)
-    renderLoop(app, renderData)
+    app = initApp()
+    renderData = loadRenderData(model)
+    renderDataBVH = nothing
+    if haskey(args, "bvh")
+        renderDataBVH = loadRenderDataBVH(model, args["bvh"])
+    end
+    model = nothing
+    renderLoop(app, renderData, renderDataBVH)
     destroyApp(app)
 end
 
@@ -54,13 +61,13 @@ mutable struct Application
     window
     imgui
     camera
-    model
     configs
 end
 
 mutable struct RenderData
     VAO
     VBO
+    vertexCount
     pNolit # nolit shader program
     pLight # light shader program
     color::Color3 # model base color
@@ -68,9 +75,22 @@ mutable struct RenderData
     tRotScale::Vector2 # model rotation (around Y axis) & scale
     enableLight
     enableNormalColor # use normal as base color
+    enable
 end
 
-function renderLoop(app, renderData)
+mutable struct RenderDataBVH
+    VAO
+    VBO
+    vertexCount
+    maxDepth::Float32
+    displayDepthL::Float32
+    displayDepthR::Float32
+    prog
+    color::Color4
+    enable
+end
+
+function renderLoop(app, renderData, renderDataBVH)
     while !GLFW.WindowShouldClose(app.window)
         app.configs.winW, app.configs.winH = GLFW.GetFramebufferSize(app.window)
         if app.configs.wireframe
@@ -83,28 +103,47 @@ function renderLoop(app, renderData)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         # render model
-        matProj = computeProjection(app.camera.fov, app.camera.ratio, app.camera.near, app.camera.far)
-        matView = computeView(app.camera.p_pos, app.camera.p_center, app.camera.p_up)
+        matProjView = computeProjection(app.camera.fov, app.camera.ratio, app.camera.near, app.camera.far) *
+            computeView(app.camera.p_pos, app.camera.p_center, app.camera.p_up)
         matModel = computeScale(
                 computeRotation(computeTranslate(renderData.tTrans),
                 renderData.tRotScale.x, Vector3{Float32}(0,1,0)),
             Vector3(renderData.tRotScale.y))
         matNormal = inv(matModel)'
-            
-        prog = renderData.enableLight ? renderData.pLight : renderData.pNolit
-        glUseProgram(prog)
-        glUniform3fv(glGetUniformLocation(prog, "baseColor"), 1, renderData.color)
-        glUniform3fv(glGetUniformLocation(prog, "viewPos"), 1, app.camera.p_pos)
-        glUniformMatrix4fv(glGetUniformLocation(prog, "mProjView"), 1, GL_FALSE, matProj * matView)
-        glUniformMatrix4fv(glGetUniformLocation(prog, "mModel"), 1, GL_FALSE, matModel)
-        glUniformMatrix4fv(glGetUniformLocation(prog, "mNormal"), 1, GL_FALSE, matNormal)
-        glUniform1f(glGetUniformLocation(prog, "useNormalColor"), renderData.enableNormalColor ? 1.0 : 0.0)
-        glBindVertexArray(renderData.VAO)
-        glDrawArrays(GL_TRIANGLES, 0, app.model.vertexCount)
-        glBindVertexArray(0)
-        glUseProgram(0)
 
-        renderUI(app, renderData)
+        if renderData.enable
+            prog = renderData.enableLight ? renderData.pLight : renderData.pNolit
+            glUseProgram(prog)
+            glUniform3fv(glGetUniformLocation(prog, "baseColor"), 1, renderData.color)
+            glUniform3fv(glGetUniformLocation(prog, "viewPos"), 1, app.camera.p_pos)
+            glUniformMatrix4fv(glGetUniformLocation(prog, "mProjView"), 1, GL_FALSE, matProjView)
+            glUniformMatrix4fv(glGetUniformLocation(prog, "mModel"), 1, GL_FALSE, matModel)
+            glUniformMatrix4fv(glGetUniformLocation(prog, "mNormal"), 1, GL_FALSE, matNormal)
+            glUniform1f(glGetUniformLocation(prog, "useNormalColor"), renderData.enableNormalColor ? 1.0 : 0.0)
+            glBindVertexArray(renderData.VAO)
+            glDrawArrays(GL_TRIANGLES, 0, renderData.vertexCount)
+            glBindVertexArray(0)
+            glUseProgram(0)
+        end
+
+        # render BVH if exists
+        if renderDataBVH !== nothing && renderDataBVH.enable
+            glEnable(GL_BLEND)
+            glBlendEquation(GL_FUNC_ADD)
+            glBlendFunc(GL_SRC_ALPHA, GL_DST_ALPHA)
+            glUseProgram(renderDataBVH.prog)
+            glUniform1f(glGetUniformLocation(renderDataBVH.prog, "thresL"), renderDataBVH.displayDepthL / renderDataBVH.maxDepth)
+            glUniform1f(glGetUniformLocation(renderDataBVH.prog, "thresR"), renderDataBVH.displayDepthR / renderDataBVH.maxDepth)
+            glUniform4fv(glGetUniformLocation(renderDataBVH.prog, "baseColor"), 1, renderDataBVH.color)
+            glUniformMatrix4fv(glGetUniformLocation(renderDataBVH.prog, "mvp"), 1, GL_FALSE, matProjView * matModel)
+            glBindVertexArray(renderDataBVH.VAO)
+            glDrawArrays(GL_TRIANGLES, 0, renderDataBVH.vertexCount)
+            glBindVertexArray(0)
+            glUseProgram(0)
+            glDisable(GL_BLEND)
+        end
+
+        renderUI(app, renderData, renderDataBVH)
         GLFW.PollEvents()
         GLFW.SwapBuffers(app.window)
         begin
@@ -119,7 +158,7 @@ function renderLoop(app, renderData)
     end
 end
 
-function renderUI(app, renderData)
+function renderUI(app, renderData, renderDataBVH)
     if !app.configs.showUI
         return
     end
@@ -190,7 +229,7 @@ function renderUI(app, renderData)
             CImGui.EndTabItem()
         end
         if CImGui.BeginTabItem("Model")
-            model = app.model
+            @c CImGui.Checkbox("Draw", &renderData.enable)
             CImGui.ColorEdit3("Color", renderData.color)
             CImGui.DragFloat3("Translation", renderData.tTrans, 0.001f0)
             @c CImGui.DragFloat("Rotation", &renderData.tRotScale.x, 0.1f0, -360.0f0, 360.0f0, "%.1f")
@@ -198,9 +237,20 @@ function renderUI(app, renderData)
             @c CImGui.Checkbox("Enable Light", &renderData.enableLight)
             @c CImGui.Checkbox("Show Normal", &renderData.enableNormalColor)
             CImGui.Separator()
-            CImGui.Text(@sprintf("Number of vertices: %d", length(model.vertices)))
-            CImGui.Text(@sprintf("Number of faces: %d", length(model.facesV)))
+            CImGui.Text(@sprintf("Vertex Count: %d", renderData.vertexCount))
             CImGui.EndTabItem()
+        end
+        if renderDataBVH !== nothing
+            if CImGui.BeginTabItem("BVH")
+                @c CImGui.Checkbox("Draw", &renderDataBVH.enable)
+                @c CImGui.DragFloat("Depth Range L", &renderDataBVH.displayDepthL, 1.0f0, 1.0f0, renderDataBVH.displayDepthR, "%.0f")
+                @c CImGui.DragFloat("Depth Range R", &renderDataBVH.displayDepthR, 1.0f0, renderDataBVH.displayDepthL, renderDataBVH.maxDepth, "%.0f")
+                CImGui.ColorEdit4("Color", renderDataBVH.color)
+                CImGui.Separator()
+                CImGui.Text(@sprintf("Max Depth: %d", renderDataBVH.maxDepth))
+                CImGui.Text(@sprintf("Vertex Count: %d", renderDataBVH.vertexCount))
+                CImGui.EndTabItem()
+            end
         end
         CImGui.EndTabBar()
     end
@@ -209,7 +259,7 @@ function renderUI(app, renderData)
     CImGui.ImGui_ImplOpenGL3_RenderDrawData(CImGui.GetDrawData())
 end
 
-function initApp(model)
+function initApp()
     # initialize context
     GLFW.WindowHint(GLFW.CONTEXT_VERSION_MAJOR, 3)
     GLFW.WindowHint(GLFW.CONTEXT_VERSION_MINOR, 3)
@@ -236,7 +286,7 @@ function initApp(model)
     camera = Camera(pos=Vector3{Float32}(0,4,4), center=Vector3(Float32(0)))
     updateCamera!(camera)
     # create app
-    app = Application(window, imgui, camera, model, Configs())
+    app = Application(window, imgui, camera, Configs())
     # set callbacks
     GLFW.SetKeyCallback(window, (_, key, scancode, action, mods) -> begin
         if action == GLFW.PRESS
@@ -301,8 +351,19 @@ function destroyApp(app)
     GLFW.Terminate()
 end
 
-function loadRenderData(app)
-    model = computeModelRenderData(app.model)
+function loadRenderData(model)
+    # collect render data
+    vertices = Vector{Float32}(undef, length(model.facesV) * 6 * 3)
+    for idx in range(1, length(model.facesV))
+        fv = model.facesV[idx]
+        fn = model.facesN[idx]
+        vertices[(idx*6*3-18+1):(idx*6*3-18+3)] .= model.vertices[fv.x]
+        vertices[(idx*6*3-18+4):(idx*6*3-18+6)] .= model.normals[fn.x]
+        vertices[(idx*6*3-18+7):(idx*6*3-18+9)] .= model.vertices[fv.y]
+        vertices[(idx*6*3-18+10):(idx*6*3-18+12)] .= model.normals[fn.y]
+        vertices[(idx*6*3-18+13):(idx*6*3-18+15)] .= model.vertices[fv.z]
+        vertices[(idx*6*3-18+16):(idx*6*3-18+18)] .= model.normals[fn.z]
+    end
     # load shaders
     shaders = [
         createShader(joinpath("shaders", "nolit.vert.glsl"), GL_VERTEX_SHADER, true),
@@ -319,15 +380,132 @@ function loadRenderData(app)
     VBO::GLuint = 0
     @c glGenBuffers(1, &VBO)
     glBindBuffer(GL_ARRAY_BUFFER, VBO)
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Float32) * length(model.vertices), model.vertices, GL_STATIC_DRAW)
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Float32) * length(vertices), vertices, GL_STATIC_DRAW)
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(Float32), Ptr{Cvoid}(0))
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(Float32), Ptr{Cvoid}(3 * sizeof(Float32)))
     glEnableVertexAttribArray(0)
     glEnableVertexAttribArray(1)
     glBindVertexArray(0)
     return RenderData(
-        VAO, VBO, pNolit, pLight, Color3(Float32(1)),
-        Vector3(Float32(0)), Vector2{Float32}(0,1), true, false)
+        VAO, VBO, length(model.facesV) * 3, pNolit, pLight, Color3(Float32(1)),
+        Vector3(Float32(0)), Vector2{Float32}(0,1), true, false, true)
+end
+
+function loadRenderDataBVH(model, path)::RenderDataBVH
+    # load bvh tree
+    println("Loading existing $path")
+    data = loadFileBinary(path)
+    bvh = data["BVH"]
+    ordered = data["Ordered"]
+    vertices = data["Vertices"]
+    # validate data
+    @assert length(vertices) == length(model.vertices) "Failed to load BVH, incorrect vertices!"
+    # compile shaders
+    shaders = [
+        createShader(joinpath("shaders", "bvh.vert.glsl"), GL_VERTEX_SHADER, true),
+        createShader(joinpath("shaders", "bvh.frag.glsl"), GL_FRAGMENT_SHADER, true)
+    ]
+    program = createShaderProgram(shaders)
+    # collect render data
+    nodeCount = 0
+    maxDepth = 0
+    function countNodes(bvh::BVH.BVHNode, depth=1)
+        nodeCount += 1
+        maxDepth = max(maxDepth, depth)
+        for node in bvh.children
+            countNodes(node, depth+1)
+        end
+    end
+    countNodes(bvh)
+    # each node as a cube has 14 vertices
+    # each vertex will be (position, depth)
+    # refer to: https://stackoverflow.com/questions/28375338/cube-using-single-gl-triangle-strip
+    vertices = Vector{Float32}(undef, nodeCount * 36 * 4)
+    verticesIdx = length(vertices)
+    cubedata = Vector{Float32}([
+        -0.5,-0.5,-0.5,
+        -0.5,-0.5, 0.5,
+        -0.5, 0.5, 0.5,
+         0.5, 0.5,-0.5,
+        -0.5,-0.5,-0.5,
+        -0.5, 0.5,-0.5,
+         0.5,-0.5, 0.5,
+        -0.5,-0.5,-0.5,
+         0.5,-0.5,-0.5,
+         0.5, 0.5,-0.5,
+         0.5,-0.5,-0.5,
+        -0.5,-0.5,-0.5,
+        -0.5,-0.5,-0.5,
+        -0.5, 0.5, 0.5,
+        -0.5, 0.5,-0.5,
+         0.5,-0.5, 0.5,
+        -0.5,-0.5, 0.5,
+        -0.5,-0.5,-0.5,
+        -0.5, 0.5, 0.5,
+        -0.5,-0.5, 0.5,
+         0.5,-0.5, 0.5,
+         0.5, 0.5, 0.5,
+         0.5,-0.5,-0.5,
+         0.5, 0.5,-0.5,
+         0.5,-0.5,-0.5,
+         0.5, 0.5, 0.5,
+         0.5,-0.5, 0.5,
+         0.5, 0.5, 0.5,
+         0.5, 0.5,-0.5,
+        -0.5, 0.5,-0.5,
+         0.5, 0.5, 0.5,
+        -0.5, 0.5,-0.5,
+        -0.5, 0.5, 0.5,
+         0.5, 0.5, 0.5,
+        -0.5, 0.5, 0.5,
+         0.5,-0.5, 0.5
+    ])
+    # bfs build in reverse ordered
+    # so that inner boxes get rendered first
+    # better for OpenGL blending
+    function bfsBuild(bvh::BVH.BVHNode)
+        queue = [(bvh, 1)]
+        while !isempty(queue)
+            node, depth = popfirst!(queue)
+            # compute transformation matrix
+            bounds = node.bounds
+            centroid = (bounds.pMax + bounds.pMin) * Float32(0.5)
+            extent = bounds.pMax - bounds.pMin
+            @assert !(isnan(sum(extent)) || isinf(sum(extent))) "Failed to compute renderdata for BVH! Invalid AABB found: $(bounds)!"
+            extent .= extent .+ max(extent.x, extent.y, extent.z) / Float32(depth * 100) * rand()
+            mat = computeScale(computeTranslate(centroid), extent)
+            for idx in range(length(cubedata), 1; step=-3)
+                vec = Vector4{Float32}(
+                    cubedata[idx-2],
+                    cubedata[idx-1],
+                    cubedata[idx], 1)
+                vec .= mat * vec
+                vertices[(verticesIdx-3):(verticesIdx-1)] .= vec[1:3]
+                vertices[verticesIdx] = Float32(depth) / Float32(maxDepth)
+                verticesIdx -= 4
+            end
+            # add children to queue
+            for child in node.children
+                push!(queue, (child, depth+1))
+            end
+        end
+    end
+    bfsBuild(bvh)
+    # create VAO, VBO
+    VAO::GLuint = 0
+    @c glGenVertexArrays(1, &VAO)
+    glBindVertexArray(VAO)
+    VBO::GLuint = 0
+    @c glGenBuffers(1, &VBO)
+    glBindBuffer(GL_ARRAY_BUFFER, VBO)
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Float32) * length(vertices), vertices, GL_STATIC_DRAW)
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, C_NULL)
+    glEnableVertexAttribArray(0)
+    glBindVertexArray(0)
+    return RenderDataBVH(
+        VAO, VBO, nodeCount * 36, convert(Float32, maxDepth),
+        Float32(1), convert(Float32, maxDepth), program,
+        Color4{Float32}(1,0,0.4,0.5/maxDepth), false)
 end
 
 main()
