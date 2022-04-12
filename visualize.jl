@@ -30,7 +30,7 @@ function main()
     app = initApp()
     renderData = loadRenderData(model)
     renderDataBVH = nothing
-    if haskey(args, "bvh")
+    if args["bvh"] !== nothing
         renderDataBVH = loadRenderDataBVH(model, args["bvh"])
     end
     model = nothing
