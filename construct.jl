@@ -52,7 +52,7 @@ function main()
         else
             println("Constructing BVHSimple with middle criteria")
             primitives = createPrimitives(model)
-            ordered = BVH.BVHPrimitive{Float32, UInt32}[]
+            ordered = Vector3{UInt32}[]
             bvh = BVH.constructBVHSimple!(primitives, ordered, 1, length(primitives), :middle)
         end
         if args["save"]
@@ -71,7 +71,7 @@ function main()
         else
             println("Constructing BVHSimple with median criteria")
             primitives = createPrimitives(model)
-            ordered = BVH.BVHPrimitive{Float32, UInt32}[]
+            ordered = Vector3{UInt32}[]
             bvh = BVH.constructBVHSimple!(primitives, ordered, 1, length(primitives), :median)
         end
         if args["save"]
@@ -90,7 +90,7 @@ function main()
         else
             println("Constructing BVH with SAH")
             primitives = createPrimitives(model)
-            ordered = BVH.BVHPrimitive{Float32, UInt32}[]
+            ordered = Vector3{UInt32}[]
             bvh = BVH.constructBVHSAH!(primitives, ordered, 1, length(primitives))
         end
         if args["save"]

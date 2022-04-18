@@ -10,7 +10,7 @@ end
 
 function constructBVHSAH!(
     primitives::AbstractVector{BVHPrimitive{T, K}},
-    orderedPrimitives::AbstractVector{BVHPrimitive{T, K}},
+    orderedPrimitives::AbstractVector{Vector3{K}},
     idxBegin::Integer, idxEnd::Integer
 )::BVHNode where {T<:DataType, K<:DataType}
     @assert idxBegin <= idxEnd "[constructBVHSAH!] Failed to construct BVHSAH!"
@@ -25,7 +25,9 @@ function constructBVHSAH!(
     if idxEnd - idxBegin == 0
         # in this case, initialize as a leaf node
         primStart = length(orderedPrimitives) + 1
-        push!(orderedPrimitives, primitives[idxBegin:idxEnd]...)
+        for idx in idxBegin:idxEnd
+            push!(orderedPrimitives, primitives[idx].face)
+        end
         return BVHNode{T}(boundsAll, primStart, length(orderedPrimitives), [])
     end
     # step3: select split dimension by the maximum extent
@@ -34,7 +36,9 @@ function constructBVHSAH!(
     if boundsCentroid.pMax[splitDim] == boundsCentroid.pMin[splitDim]
         # in this case, initialize as a leaf node
         primStart = length(orderedPrimitives) + 1
-        push!(orderedPrimitives, primitives[idxBegin:idxEnd]...)
+        for idx in idxBegin:idxEnd
+            push!(orderedPrimitives, primitives[idx].face)
+        end
         return BVHNode{T}(boundsAll, primStart, length(orderedPrimitives), [])
     end
     mid = idxBegin
@@ -49,14 +53,14 @@ function constructBVHSAH!(
         # else do normal SAH
         nBuckets = 12
         buckets = [SAHBucket(0, AABB{T}()) for _ in 1:nBuckets]
-        # step 5: initialize buckets
+        # step5: initialize buckets
         for idx in idxBegin:idxEnd
             b = round(Integer, nBuckets * computeOffset(boundsCentroid, primitives[idx].centroid)[splitDim])
             b = max(0, min(b, nBuckets - 1)) + 1
             buckets[b].count += 1
             combineAABB!(buckets[b].bounds, primitives[idx].bounds)
         end
-        # step 6: compute costs for each bucket
+        # step6: compute costs for each bucket
         costs = Vector{T}(undef, nBuckets - 1)
         for i in 1:(nBuckets-1)
             c0, c1 = 0, 0
@@ -71,10 +75,10 @@ function constructBVHSAH!(
             end
             costs[i] = T(0.125) + (c0 * computeSurfaceArea(b0) + c1 * computeSurfaceArea(b1)) / computeSurfaceArea(boundsAll)
         end
-        # step 7: search bucket that minimizes SAH
+        # step7: search bucket that minimizes SAH
         minSplitBucket = argmin(costs)
         minCost = costs[minSplitBucket]
-        # step 8: decide whether to create leaf or split
+        # step8: decide whether to create leaf or split
         if nPrims >= 256 || minCost < nPrims
             # partition by assigned bucket
             mapFunc = x -> begin
@@ -88,19 +92,23 @@ function constructBVHSAH!(
         else
             # in this case, initialize as a leaf node
             primStart = length(orderedPrimitives) + 1
-            push!(orderedPrimitives, primitives[idxBegin:idxEnd]...)
+            for idx in idxBegin:idxEnd
+                push!(orderedPrimitives, primitives[idx].face)
+            end
             return BVHNode{T}(boundsAll, primStart, length(orderedPrimitives), [])
         end
     end
-    # step 8: check success partition
+    # step9: check success partition
     if mid < idxBegin
         println("[constructBVHSAH!] Warning: failed to partition nodes in ($idxBegin,$idxEnd)!")
         # if partition failed, create leaf node
         primStart = length(orderedPrimitives) + 1
-        push!(orderedPrimitives, primitives[idxBegin:idxEnd]...)
+        for idx in idxBegin:idxEnd
+            push!(orderedPrimitives, primitives[idx].face)
+        end
         return BVHNode{T}(boundsAll, primStart, length(orderedPrimitives), [])
     end
-    # step 9: recursion
+    # step10: recursion
     return BVHNode{T}(boundsAll, 0, 0, [
         constructBVHSAH!(primitives, orderedPrimitives, idxBegin, mid), # left node
         constructBVHSAH!(primitives, orderedPrimitives, mid+1, idxEnd)  # right node

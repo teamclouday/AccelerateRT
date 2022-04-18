@@ -5,7 +5,7 @@ using ..AccelerateRT: ModelData, Vector3, DataType
 
 function constructBVHSimple!(
     primitives::AbstractVector{BVHPrimitive{T, K}},
-    orderedPrimitives::AbstractVector{BVHPrimitive{T, K}},
+    orderedPrimitives::AbstractVector{Vector3{K}},
     idxBegin::Integer, idxEnd::Integer, criteria::Symbol
 )::BVHNode where {T<:DataType, K<:DataType}
     @assert idxBegin <= idxEnd "[constructBVHSimple!] Failed to construct BVHSimple!"
@@ -20,7 +20,9 @@ function constructBVHSimple!(
     if idxEnd - idxBegin == 0
         # in this case, initialize as a leaf node
         primStart = length(orderedPrimitives) + 1
-        push!(orderedPrimitives, primitives[idxBegin:idxEnd]...)
+        for idx in idxBegin:idxEnd
+            push!(orderedPrimitives, primitives[idx].face)
+        end
         return BVHNode{T}(boundsAll, primStart, length(orderedPrimitives), [])
     end
     # step3: select split dimension by the maximum extent
@@ -29,7 +31,9 @@ function constructBVHSimple!(
     if boundsCentroid.pMax[splitDim] == boundsCentroid.pMin[splitDim]
         # in this case, initialize as a leaf node
         primStart = length(orderedPrimitives) + 1
-        push!(orderedPrimitives, primitives[idxBegin:idxEnd]...)
+        for idx in idxBegin:idxEnd
+            push!(orderedPrimitives, primitives[idx].face)
+        end
         return BVHNode{T}(boundsAll, primStart, length(orderedPrimitives), [])
     end
     # step5: partition faces
@@ -57,7 +61,9 @@ function constructBVHSimple!(
         println("[constructBVHSimple!] Warning: $(criteria) failed to partition nodes in ($idxBegin,$idxEnd)!")
         # if partition failed, create leaf node
         primStart = length(orderedPrimitives) + 1
-        push!(orderedPrimitives, primitives[idxBegin:idxEnd]...)
+        for idx in idxBegin:idxEnd
+            push!(orderedPrimitives, primitives[idx].face)
+        end
         return BVHNode{T}(boundsAll, primStart, length(orderedPrimitives), [])
     end
     # step7: recursion
