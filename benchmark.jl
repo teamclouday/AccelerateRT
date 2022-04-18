@@ -240,14 +240,14 @@ visualize(collected[4], :colored, "bunny (SAH) leaf node visits")
 
 # ╔═╡ Cell order:
 # ╠═172dec87-d954-4060-85eb-3df1802ce37b
-# ╟─545173b2-4d4c-4893-a17b-1b9d3bee9acb
-# ╟─000f910a-fd1d-47ce-ba0d-80f8a5fbf14d
-# ╟─1d15a653-8f03-40a0-88d9-dce7f5c8de3d
+# ╠═545173b2-4d4c-4893-a17b-1b9d3bee9acb
+# ╠═000f910a-fd1d-47ce-ba0d-80f8a5fbf14d
+# ╠═1d15a653-8f03-40a0-88d9-dce7f5c8de3d
 # ╠═c7628a34-ffb8-4039-8c4f-c9e38b3c1d4b
 # ╠═3bc7b47a-ee1e-4377-9dc6-4648b961d94b
 # ╠═54ec5984-7427-4734-b8b9-7e67b2b9cb38
 # ╠═991d9115-7a03-4152-904a-6f3ec0995136
-# ╟─a54ede51-f76e-46f5-a649-4a0cbdb97760
+# ╠═a54ede51-f76e-46f5-a649-4a0cbdb97760
 # ╠═acf160be-a3cd-4c58-9895-25e9c1f13abe
 # ╠═2880acb4-7ff8-4bf6-a2f6-84f45adffe89
 # ╠═89bb0d31-f2d1-4f46-a46d-2359a34ba9ef
