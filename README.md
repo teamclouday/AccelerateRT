@@ -88,14 +88,14 @@ The following command visualizes `bunny` model and its precomputed BVH structure
 
 ### Benchmark
 
-Benchmark results and process are stored in `benchmark.jl` notebook.  
+Visualized effects can be found in `benchmark_notebook.jl` notebook.  
 To execute it:  
 ```
 >> julia
 julia> import Pluto
 julia> Pluto.run()
 ```
-And open `benchmark.jl` in browser.  
+And open `benchmark_notebook.jl` in browser.  
 
 To see the code only (do not execute all cells):  
 ```

@@ -3,15 +3,16 @@
 using .BVH: AABB, combineAABB, combineAABB!, computeOffset, computeCentroid, computeSurfaceArea, BVHNode, BVHPrimitive
 using ..AccelerateRT: ModelData, Vector3, DataType
 
+mutable struct SAHBucket
+    count::Integer
+    bounds::AABB
+end
+
 function constructBVHSAH!(
     primitives::AbstractVector{BVHPrimitive{T, K}},
     orderedPrimitives::AbstractVector{Vector3{K}},
     idxBegin::Integer, idxEnd::Integer
 )::BVHNode where {T<:DataType, K<:DataType}
-    mutable struct SAHBucket
-        count::Integer
-        bounds::AABB
-    end
     @assert idxBegin <= idxEnd "[constructBVHSAH!] Failed to construct BVHSAH!"
     # step1: compute total bounds and centroid bounds
     boundsAll = AABB{T}()
