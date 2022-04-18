@@ -62,18 +62,10 @@ mutable struct Ray
 end
 
 # ╔═╡ 89bb0d31-f2d1-4f46-a46d-2359a34ba9ef
-models = ["bunny", "teapot", "sponza"]
+models = ["teapot", "bunny", "dragon", "sponza"]
 
 # ╔═╡ 8c1a3646-cc41-45ce-8e21-9ba8eb151107
 bvhTypes = ["middle", "median", "sah"]
-
-# ╔═╡ 5c5a5ea2-c1b7-4f8b-8388-8155b153dd75
-camera = Camera(
-	ACC.Vector3{Float32}(0, 2, 3),
-	ACC.Vector3(0f0),
-	45.0f0,
-	ACC.Vector2{UInt32}(50, 50)
-)
 
 # ╔═╡ 8716782b-d88c-4247-b89b-9cb6793c6bb0
 # intersection with AABB
@@ -163,11 +155,14 @@ function rayTrace(
 		# initialize ray
 		ray = (() -> begin
 			center = ACC.Vector2{Float32}(ix-1, iy-1)
-			d = 2.0f0 .* (center ./ res) .- 1.0f0
+			d = 2.0f0 .* ((center .+ 0.5f0) ./ res) .- 1.0f0
 			scale = Float32(tan(deg2rad(camera.fov * 0.5f0)))
 			d.x *= scale
 			d.y *= camRatio * scale
 			dir = normalize((d.x .* camRight) .+ (d.y .* camUp) .+ camForward)
+			dir.x = iszero(dir.x) ? 1f-6 : dir.x
+			dir.y = iszero(dir.y) ? 1f-6 : dir.y
+			dir.z = iszero(dir.z) ? 1f-6 : dir.z
 			return Ray(camera.pos, dir, typemax(Float32))
 		end)()
 		# cast into bvh
@@ -212,35 +207,45 @@ function rayTrace(
 	return depthMap, treeDepthMap, visitsMap, visitsLeafMap
 end
 
-# ╔═╡ 772baf17-7c71-45c4-9ded-a0acaeda9186
-collected = rayTrace(camera, models[1], bvhTypes[3]);
-
 # ╔═╡ 010216eb-81ad-4709-b141-7cae1dc33228
 function visualize(data, style, title)
 	gr()
 	m, n = size(data)
 	if style == :depth
-		heatmap(data', color=:greys, aspect_ratio=1, axis=nothing, title=title, xlims=(1,m), ylims=(1,n))
+		return heatmap(data', color=:greys, aspect_ratio=1, axis=nothing, border=:none, title=title, xlims=(1,m), ylims=(1,n), titlefontsize=10)
 	elseif style == :colored
-		heatmap(data', color=:thermal, aspect_ratio=1, axis=nothing, title=title, xlims=(1,m), ylims=(1,n))
+		return heatmap(data', color=:thermal, aspect_ratio=1, axis=nothing, border=:none, title=title, xlims=(1,m), ylims=(1,n), titlefontsize=10)
 	end
 end
 
-# ╔═╡ ea289b6b-1146-4b8e-b8b4-10d49f44e52e
-visualize(collected[1], :depth, "bunny (SAH) depth")
+# ╔═╡ 5304c09f-8463-427d-83ef-90eb66670c27
+function visualizeAll(camera, model)
+	collected = []
+	for t in bvhTypes
+		c = rayTrace(camera, model, t)
+		p1 = visualize(c[1], :depth, "$model ($t) depth")
+		p2 = visualize(c[2], :colored, "$model ($t) max tree depth")
+		p3 = visualize(c[3], :colored, "$model ($t) node visits")
+		p4 = visualize(c[4], :colored, "$model ($t) leaf node visits")
+		push!(collected, p1, p2, p3, p4)
+	end
+	plot(collected..., layout=(length(bvhTypes), 4), size=(1000,800), legend=false)
+end
 
-# ╔═╡ 29be0939-a67a-49e4-9db1-9e7b06c7cfd2
-visualize(collected[2], :colored, "bunny (SAH) tree depth")
+# ╔═╡ f8ce933e-286f-403b-942b-f0b536ee52a1
+camera = Camera(
+	ACC.Vector3{Float32}(0, 3, 3),
+	ACC.Vector3{Float32}(0, 0, 0),
+	45.0f0,
+	ACC.Vector2{UInt32}(25, 25)
+)
 
-# ╔═╡ a1ad3470-4b57-4bc6-b67f-ef954ee6555b
-visualize(collected[3], :colored, "bunny (SAH) node visits")
-
-# ╔═╡ abe581a8-2571-4989-801f-896b6d52dee2
-visualize(collected[4], :colored, "bunny (SAH) leaf node visits")
+# ╔═╡ 49e97f5c-bb86-43a9-9ce7-0992b0d40a03
+visualizeAll(camera, models[1])
 
 # ╔═╡ Cell order:
-# ╠═172dec87-d954-4060-85eb-3df1802ce37b
-# ╠═545173b2-4d4c-4893-a17b-1b9d3bee9acb
+# ╟─172dec87-d954-4060-85eb-3df1802ce37b
+# ╟─545173b2-4d4c-4893-a17b-1b9d3bee9acb
 # ╠═000f910a-fd1d-47ce-ba0d-80f8a5fbf14d
 # ╠═1d15a653-8f03-40a0-88d9-dce7f5c8de3d
 # ╠═c7628a34-ffb8-4039-8c4f-c9e38b3c1d4b
@@ -252,13 +257,10 @@ visualize(collected[4], :colored, "bunny (SAH) leaf node visits")
 # ╠═2880acb4-7ff8-4bf6-a2f6-84f45adffe89
 # ╠═89bb0d31-f2d1-4f46-a46d-2359a34ba9ef
 # ╠═8c1a3646-cc41-45ce-8e21-9ba8eb151107
-# ╠═5c5a5ea2-c1b7-4f8b-8388-8155b153dd75
 # ╠═8716782b-d88c-4247-b89b-9cb6793c6bb0
 # ╠═83f6f667-d39c-45b1-8929-db43191feba4
 # ╠═407c753a-f728-41ab-8f6c-c1dd5a173bc2
-# ╠═772baf17-7c71-45c4-9ded-a0acaeda9186
 # ╠═010216eb-81ad-4709-b141-7cae1dc33228
-# ╠═ea289b6b-1146-4b8e-b8b4-10d49f44e52e
-# ╠═29be0939-a67a-49e4-9db1-9e7b06c7cfd2
-# ╠═a1ad3470-4b57-4bc6-b67f-ef954ee6555b
-# ╠═abe581a8-2571-4989-801f-896b6d52dee2
+# ╠═5304c09f-8463-427d-83ef-90eb66670c27
+# ╠═f8ce933e-286f-403b-942b-f0b536ee52a1
+# ╠═49e97f5c-bb86-43a9-9ce7-0992b0d40a03

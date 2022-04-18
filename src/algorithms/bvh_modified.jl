@@ -1,9 +1,9 @@
-# BVH built with SAH
+# BVH modifed based on binned-SAH
 
 using .BVH: AABB, combineAABB, combineAABB!, computeOffset, computeCentroid, computeSurfaceArea, BVHNode, BVHPrimitive
 using ..AccelerateRT: ModelData, Vector3, DataType
 
-function constructBVHSAH!(
+function constructBVHModified!(
     primitives::AbstractVector{BVHPrimitive{T, K}},
     orderedPrimitives::AbstractVector{Vector3{K}},
     idxBegin::Integer, idxEnd::Integer
@@ -12,7 +12,7 @@ function constructBVHSAH!(
         count::Integer
         bounds::AABB
     end
-    @assert idxBegin <= idxEnd "[constructBVHSAH!] Failed to construct BVHSAH!"
+    @assert idxBegin <= idxEnd "[constructBVHModified!] Failed to construct BVHSAH!"
     # step1: compute total bounds and centroid bounds
     boundsAll = AABB{T}()
     boundsCentroid = AABB{T}()
@@ -72,7 +72,8 @@ function constructBVHSAH!(
                 combineAABB!(b1, buckets[j].bounds)
                 c1 += buckets[j].count
             end
-            costs[i] = T(0.125) + (c0 * computeSurfaceArea(b0) + c1 * computeSurfaceArea(b1)) / computeSurfaceArea(boundsAll)
+            # TODO: modify SAH
+            costs[i] = (c0 * computeSurfaceArea(b0) + c1 * computeSurfaceArea(b1)) / computeSurfaceArea(boundsAll)
         end
         # step7: search bucket that minimizes SAH
         minSplitBucket = argmin(costs)
@@ -99,7 +100,7 @@ function constructBVHSAH!(
     end
     # step9: check success partition
     if mid < idxBegin
-        @warn "[constructBVHSAH!] Warning: failed to partition nodes in ($idxBegin,$idxEnd)!"
+        @warn "[constructBVHModified!] Warning: failed to partition nodes in ($idxBegin,$idxEnd)!"
         # if partition failed, create leaf node
         primStart = length(orderedPrimitives) + 1
         for idx in idxBegin:idxEnd
@@ -109,7 +110,7 @@ function constructBVHSAH!(
     end
     # step10: recursion
     return BVHNode{T}(boundsAll, 0, 0, [
-        constructBVHSAH!(primitives, orderedPrimitives, idxBegin, mid), # left node
-        constructBVHSAH!(primitives, orderedPrimitives, mid+1, idxEnd)  # right node
+        constructBVHModified!(primitives, orderedPrimitives, idxBegin, mid), # left node
+        constructBVHModified!(primitives, orderedPrimitives, mid+1, idxEnd)  # right node
     ])
 end

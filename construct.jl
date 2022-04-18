@@ -17,6 +17,9 @@ function parseCommandline()
         "--algSAH"
             help = "construct BVH with SAH"
             action = :store_true
+        "--algSAHM"
+            help = "construct BVH with modifed SAH (new algorithm)"
+            action = :store_true
         "--save"
             help = "save constructed structure"
             action = :store_true
@@ -89,6 +92,25 @@ function main()
             ordered = data["Ordered"]
         else
             println("Constructing BVH with SAH")
+            primitives = createPrimitives(model)
+            ordered = Vector3{UInt32}[]
+            bvh = BVH.constructBVHSAH!(primitives, ordered, 1, length(primitives))
+        end
+        if args["save"]
+            println("Saving to $path")
+            saveFileBinary(path, Dict("BVH" => bvh, "Ordered" => ordered, "Vertices" => model.vertices))
+        end
+    elseif args["algSAHM"]
+        ext = ".sahm.jld2"
+        path = bvhPath * ext
+        ordered = nothing
+        if args["skip"] && isfile(path)
+            println("Loading existing $path")
+            data = loadFileBinary(path)
+            bvh = data["BVH"]
+            ordered = data["Ordered"]
+        else
+            println("Constructing BVH with modified SAH (new algorithm)")
             primitives = createPrimitives(model)
             ordered = Vector3{UInt32}[]
             bvh = BVH.constructBVHSAH!(primitives, ordered, 1, length(primitives))

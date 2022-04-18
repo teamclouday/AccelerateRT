@@ -42,17 +42,17 @@ function constructBVHSimple!(
         # find middle index
         mid = div(idxBegin + idxEnd, 2)
         # partial sort
-        mapFunc = x->x.centroid[splitDim]
+        mapFunc = x -> x.centroid[splitDim]
         partialsort!(view(primitives, idxBegin:idxEnd), mid - idxBegin + 1; by=mapFunc)
     elseif criteria == :middle
         # compute middle value
         midVal = (boundsCentroid.pMax[splitDim] + boundsCentroid.pMin[splitDim]) * T(0.5)
         # partition primitives by middle value
-        mapFunc = x->x.centroid[splitDim]>=midVal
+        mapFunc = x -> x.centroid[splitDim] >= midVal
         sort!(view(primitives, idxBegin:idxEnd); by=mapFunc)
         # find middle index
         # mid = 0 if split failed
-        mid = searchsortedlast(map(mapFunc, view(primitives, idxBegin:idxEnd)), false)
+        mid = searchsortedlast(map(mapFunc, view(primitives, idxBegin:idxEnd)), false) + idxBegin - 1
     else
         error("[constructBVHSimple!] Failed to construct BVHSimple, unrecognized criteria $(criteria)!")
     end
