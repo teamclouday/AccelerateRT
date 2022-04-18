@@ -100,7 +100,7 @@ function constructBVHSAH!(
     end
     # step9: check success partition
     if mid < idxBegin
-        println("[constructBVHSAH!] Warning: failed to partition nodes in ($idxBegin,$idxEnd)!")
+        @warn "[constructBVHSAH!] Warning: failed to partition nodes in ($idxBegin,$idxEnd)!"
         # if partition failed, create leaf node
         primStart = length(orderedPrimitives) + 1
         for idx in idxBegin:idxEnd

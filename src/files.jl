@@ -20,7 +20,7 @@ end
 
 function saveFileBinary(path::String, data)
     if ispath(path)
-        println("[saveFileBinary] Warning: overwritting $(path)!")
+        @warn "[saveFileBinary] Warning: overwritting $(path)!"
     end
     mkpath(dirname(path))
     save(path, data)
@@ -101,7 +101,7 @@ function loadObjFile(path::String)
     # make sure face is not empty
     if isempty(facesV)
         @assert mod(length(vertices), 3) == 0 "[loadObjFile] Failed to load $path, wrong number of vertices!"
-        println("[loadObjFile] Warning: no face info, recomputing!")
+        @warn "[loadObjFile] Warning: no face info, recomputing!"
         size = div(length(vertices), 3)
         normals = Vector{Vector3{Float32}}(undef, size)
         facesV = Vector{Vector3{UInt32}}(undef, size)

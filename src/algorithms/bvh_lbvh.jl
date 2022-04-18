@@ -96,7 +96,7 @@ function constructLBVH!(
 )::BVHNode where {T<:DataType, K<:DataType}
     # check number of threads
     if parallel && Threads.nthreads() <= 1
-        println("[constructLBVH!] Warning: parallel requested but only $(Threads.nthreads()) threads available, export JULIA_NUM_THREADS=8 before running this script!")
+        @warn "[constructLBVH!] Warning: parallel requested but only $(Threads.nthreads()) threads available, export JULIA_NUM_THREADS=8 before running this script!"
     end
     # step1: compute total bounds
     boundsAll = AABB{T}()

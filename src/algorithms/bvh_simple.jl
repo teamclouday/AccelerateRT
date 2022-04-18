@@ -58,7 +58,7 @@ function constructBVHSimple!(
     end
     # step6: check success partition
     if mid < idxBegin
-        println("[constructBVHSimple!] Warning: $(criteria) failed to partition nodes in ($idxBegin,$idxEnd)!")
+        @warn "[constructBVHSimple!] Warning: $(criteria) failed to partition nodes in ($idxBegin,$idxEnd)!"
         # if partition failed, create leaf node
         primStart = length(orderedPrimitives) + 1
         for idx in idxBegin:idxEnd
