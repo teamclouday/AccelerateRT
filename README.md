@@ -88,7 +88,7 @@ The following command visualizes `bunny` model and its precomputed BVH structure
 
 ### Benchmark
 
-Visualized effects can be found in `benchmark_notebook.jl` notebook.  
+Visualized effects can be found in `benchmark_notebook.jl` notebook, or by opening `benchmark_notebook.jl.pdf` file.  
 To execute it:  
 ```
 >> julia
@@ -96,8 +96,5 @@ julia> import Pluto
 julia> Pluto.run()
 ```
 And open `benchmark_notebook.jl` in browser.  
+To see the code only, open `benchmark_notebook.jl` in a text editor.  
 
-To see the code only (do not execute all cells):  
-```
-julia> Pluto.run(Pluto.Configuration.from_flat_kwargs(;run_notebook_on_load=false))
-```
