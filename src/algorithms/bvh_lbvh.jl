@@ -148,7 +148,7 @@ function constructLBVH!(
         nodesCreated = 0
         firstBitIndex = 29 - 12
         treelet = treeletsToBuild[idx]
-        treelet.nodes = 
+
     end
     if parallel
 

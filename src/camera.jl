@@ -22,8 +22,7 @@ mutable struct Camera
     Camera(;pos::Vector3, center::Vector3) = begin
         new(45.0, 0.1, 1000.0, 0.1, 1.0, 0.0, 1.0, true,
             pos, Vector3{Float32}(0.0, 1.0, 0.0),
-            Vector3{Float32}(0.0, 0.0, 0.0),
-            Vector3{Float32}(0.0, 0.0, 0.0), center)
+            Vector3(0.0f0), Vector3(0.0f0), center)
         # remember to call updateCamera after construction!
     end
 end

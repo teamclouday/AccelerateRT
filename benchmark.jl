@@ -3,6 +3,7 @@
 using ArgParse
 using Logging
 using ProgressLogging
+using TerminalLoggers
 using LinearAlgebra
 using Plots
 using Random
@@ -20,19 +21,67 @@ function parseCommandline()
         "--samples"
             help = "number of random samples"
             arg_type = Int
-            default = 20
+            default = 100
+		"--resolution"
+			help = "screen resolution (in format WxH)"
+			default = "50x50"
+		"--skip"
+			help = "whether to skip existing benchmark caches"
+			action = :store_true
     end
     return parse_args(s)
 end
 
 function main()
     args = parseCommandline()
-    models = ["teapot", "bunny", "dragon", "sponza"]
+	global_logger(TerminalLogger())
+	@info "Number of threads available: $(Threads.nthreads())"
+	benchmark(args)
+end
+
+function benchmark(args)
+	@assert args["samples"] >= 1 "argument samples should be positive!"
+	@assert args["seed"] >= 0 "argument seed should be positive!"
+	@assert !isempty(args["resolution"]) "argument resolution should not be empty!"
+	models = ["teapot", "bunny", "dragon", "sponza"]
+	modelsSetting = Dict(
+		"teapot" 	=> (Vector3(0.0f0), 3.0f0, false),
+		"bunny"		=> (Vector3{Float32}(0.0, 0.1, 0.1), 3.0f0, false),
+		"dragon"	=> (Vector3(0.0f0), 5.0f0, false),
+		"sponza"	=> (Vector3(0.0f0), 1.0f0, true)
+	)
     bvhTypes = ["middle", "median", "sah"]
-    # set random seed
-    if !iszero(args["seed"])
-        Random.seed!(args["seed"])
-    end
+	camera = Camera(
+		Vector3(0.0f0), Vector3(0.0f0), Float32(45),
+		getResolution(args["resolution"])
+	)
+	for (m,b) in Iterators.product(models, bvhTypes)
+		filepath = getFilePath(m, b, args)
+		if args["skip"] && isfile(filepath)
+			@info "Skipped $filepath"
+			continue
+		end
+		@info "Now benchmark on ($m, $b)"
+		data = Dict()
+		setting = modelsSetting[m]
+		positions = sampleSphere(args["samples"], args["seed"]) .* setting[2]
+		loaded = loadData(m, b)
+		for it in 1:args["samples"]
+			# set camera position
+			center, pos = setting[1], (positions[it, :] .+ setting[1])
+			if setting[3] # whether to revert position and center
+				pos, center = center, pos
+			end
+			camera.pos .= pos
+			camera.center .= center
+			# ray trace
+			sample = rayTrace(camera; loaded=loaded)
+			# update data
+			data[it] = sample
+		end
+		println("Saving to $filepath")
+		saveFileBinary(filepath, Dict("samples" => args["samples"], "positions" => positions, "data" => data))
+	end
 end
 
 mutable struct Camera
@@ -61,7 +110,7 @@ function intersect(ray::Ray, bounds)::Bool
 end
 
 # intersection with triangle
-function intersect!(ray::Ray, v0::ACC.Vector3, v1::ACC.Vector3, v2::ACC.Vector3)::Bool
+function intersect!(ray::Ray, v0::Vector3, v1::Vector3, v2::Vector3)::Bool
 	e1 = v1 .- v0
 	e2 = v2 .- v0
 	pvec = cross(ray.dir, e2)
@@ -106,7 +155,7 @@ function loadData(model, bvhType)
 	# load structure
 	@assert !isempty(filepath) "Failed to find constructure BVH with $model and $(bvhType)!"
 	data = with_logger(NullLogger()) do
-		ACC.loadFileBinary(filepath)
+		loadFileBinary(filepath)
 	end
 	bvh = data["BVH"]
 	ordered = data["Ordered"]
@@ -132,17 +181,17 @@ function rayTrace(
 	visitsLeafMap = zeros(Integer, (res.x, res.y))
 	# compute info from camera
 	camForward = normalize(camera.center - camera.pos)
-	camRight = normalize(cross(camForward, ACC.Vector3{Float32}(0,1,0)))
+	camRight = normalize(cross(camForward, Vector3{Float32}(0,1,0)))
 	camUp = normalize(cross(camRight, camForward))
 	camRatio = Float32(res.x) / Float32(res.y)
 	# dispatch ray for each pixel of screen
-	@withprogress begin
+	@withprogress name="raytracing" begin
 	progIter = Threads.Atomic{Int}(0)
 	progCount = Integer(res.x * res.y)
 	Threads.@threads for (ix, iy) in collect(Iterators.product(1:res.x, 1:res.y))
 		# initialize ray
 		ray = (() -> begin
-			center = ACC.Vector2{Float32}(ix-1, iy-1)
+			center = Vector2{Float32}(ix-1, iy-1)
 			d = 2.0f0 .* ((center .+ 0.5f0) ./ res) .- 1.0f0
 			scale = Float32(tan(deg2rad(camera.fov * 0.5f0)))
 			d.x *= scale
@@ -195,8 +244,47 @@ function rayTrace(
 	return depthMap, treeDepthMap, visitsMap, visitsLeafMap
 end
 
-function sample(model, bvhType, count, center, reverted=false)
+function sampleSphere(num=100, seed=0)
+	@assert num > 0 "generated number should be positive!"
+	@assert seed >= 0 "seed has to be non-negative!"
+	rng = MersenneTwister()
+	if !iszero(seed)
+		Random.seed!(rng, seed)
+	end
+	res = zeros(Float32, num, 3)
+	x1 = zeros(Float32, num)
+	x2 = zeros(Float32, num)
+	x1x2sqr = zeros(Float32, num)
+	# generate and reject
+	idx = 1
+	while idx <= num
+		m, n = (rand(rng, Float32, 2) .* Float32(2) .- Float32(1))
+		m2n2 = m^2 + n^2
+		if m2n2 >= Float32(1)
+			continue # reject
+		end
+		x1[idx], x2[idx] = m, n
+		x1x2sqr[idx] = m2n2
+		idx += 1
+	end
+	# x
+	res[:, 1] .= Float32(2) .* x1 .* sqrt.(Float32(1) .- x1x2sqr)
+	# y
+	res[:, 2] .= Float32(2) .* x2 .* sqrt.(Float32(1) .- x1x2sqr)
+	# z
+	res[:, 3] .= Float32(1) .- Float32(2) .* x1x2sqr
+	return res
+end
 
+function getResolution(res)
+	@assert occursin(r"^[0-9]+x[0-9]+$", res) "argument resolution $res is invalid!"
+	w, h = collect(eachmatch(r"[0-9]+", res))
+	return Vector2{UInt32}(parse(UInt32, w.match), parse(UInt32, h.match))
+end
+
+function getFilePath(model, bvhType, args)
+	name = "S$(args["samples"])_R$(args["resolution"])_$(model)_$(bvhType).jld2"
+	return joinpath("caches", name)
 end
 
 main()
