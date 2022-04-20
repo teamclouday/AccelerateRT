@@ -1,15 +1,29 @@
 # run benchmark and store all data
 
-using Distributed: @everywhere, @distributed, addprocs, rmprocs, nprocs
-using ArgParse
+# modify this to set number of cores
+const ParallelCores = 0
 
-@everywhere using Logging
-@everywhere using ProgressLogging
-@everywhere using TerminalLoggers
-@everywhere using LinearAlgebra
-@everywhere using Random
-@everywhere using SharedArrays
+using Distributed
 
+if ParallelCores != 1
+	cpulen = length(Sys.cpu_info())
+	addprocs(iszero(ParallelCores) ? cpulen-1 : min(ParallelCores, cpulen-1))
+end
+
+@everywhere begin
+    import Pkg
+    Pkg.activate(@__DIR__)
+end
+
+@everywhere begin
+	using ArgParse
+	using Logging
+	using ProgressLogging
+	using TerminalLoggers
+	using LinearAlgebra
+	using Random
+	using SharedArrays
+end
 @everywhere include("./src/AccelerateRT.jl")
 @everywhere using .AccelerateRT
 
@@ -27,10 +41,6 @@ function parseCommandline()
 		"--resolution"
 			help = "screen resolution (in format WxH)"
 			default = "50x50"
-		"--distribute"
-			help = "distribute tasks to multi-cores (set 0 to use all cores)"
-			arg_type = Int
-            default = 0
 		"--skip"
 			help = "whether to skip existing benchmark caches"
 			action = :store_true
@@ -40,16 +50,14 @@ end
 
 function main()
     args = parseCommandline()
-	cpulen = length(Sys.cpu_info())
-	@assert 0 <= args["distribute"] <= cpulen "Number of cores: $(args["distribute"]) not available!"
-	parallel = args["distribute"] != 1
+	parallel = ParallelCores != 1
 	if parallel
 		@info "Distributed Mode"
-		addprocs(iszero(args["distribute"]) ? cpulen - 1 : args["distribute"] - 1)
+	else
+		global_logger(TerminalLogger())
 	end
-	global_logger(TerminalLogger())
-	@info "Number of threads available:   $(Threads.nthreads())"
-	@info "Number of processes available: $(nprocs())"
+	@info "Number of threads available: $(Threads.nthreads())"
+	@info "Number of workers available: $(nworkers())"
 	benchmark(args)
 	if parallel
 		rmprocs()
@@ -75,7 +83,8 @@ function benchmark(args)
 	iters = reduce(hcat, reshape(collect.(Iterators.product(1:4, 1:3)), :))
 	iterIdxM = SharedArray{Int}(iters[1, :])
 	iterIdxB = SharedArray{Int}(iters[2, :])
-	@sync @distributed for idx in 1:length(iterIdxM)
+
+	@sync @distributed for idx = 1:length(iterIdxM)
 		mIdx, bIdx = iterIdxM[idx], iterIdxB[idx]
 		models = ["teapot", "bunny", "dragon", "sponza"]
 		bvhTypes = ["middle", "median", "sah"]
@@ -97,28 +106,28 @@ function benchmark(args)
 		filepath = getFilePath(m, b, samples, resW, resH)
 		if skip && isfile(filepath)
 			@info "Skipped $filepath"
-			continue
-		end
-		@info "Now benchmark on ($m, $b)"
-		data = Dict()
-		setting = modelsSetting[m]
-		positions = sampleSphere(samples, seed) .* setting[2]
-		loaded = loadData(m, b)
-		for it in 1:samples
-			# set camera position
-			center, pos = setting[1], (positions[it, :] .+ setting[1])
-			if setting[3] # whether to revert position and center
-				pos, center = center, pos
+		else
+			@info "Now benchmark on ($m, $b)"
+			data = Dict()
+			setting = modelsSetting[m]
+			positions = sampleSphere(samples, seed) .* setting[2]
+			loaded = loadData(m, b)
+			for it in 1:samples
+				# set camera position
+				center, pos = setting[1], (positions[it, :] .+ setting[1])
+				if setting[3] # whether to revert position and center
+					pos, center = center, pos
+				end
+				camera.pos .= pos
+				camera.center .= center
+				# ray trace
+				sample = rayTrace(camera; loaded=loaded)
+				# update data
+				data[it] = sample
 			end
-			camera.pos .= pos
-			camera.center .= center
-			# ray trace
-			sample = rayTrace(camera; loaded=loaded)
-			# update data
-			data[it] = sample
+			@info "Saving to $filepath"
+			saveFileBinary(filepath, Dict("samples" => samples, "positions" => positions, "data" => data))
 		end
-		@info "Saving to $filepath"
-		saveFileBinary(filepath, Dict("samples" => samples, "positions" => positions, "data" => data))
 	end
 end
 @everywhere mutable struct ScreenCamera
@@ -127,6 +136,7 @@ end
 	fov::Float32
 	res::Vector2{UInt32}
 end
+
 @everywhere mutable struct Ray
 	origin::Vector3{Float32}
 	dir::Vector3{Float32}

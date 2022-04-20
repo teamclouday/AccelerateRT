@@ -1,5 +1,10 @@
 # load and visualize a BVH
 
+begin
+    import Pkg
+    Pkg.activate(@__DIR__)
+end
+
 using ArgParse, Printf, CSyntax
 using GLFW, ModernGL, CImGui
 

@@ -1,5 +1,10 @@
 # construct BVH and export to binary file
 
+begin
+    import Pkg
+    Pkg.activate(@__DIR__)
+end
+
 using ArgParse
 
 include("src/AccelerateRT.jl")
