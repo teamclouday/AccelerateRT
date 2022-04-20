@@ -23,6 +23,7 @@ end
 	using LinearAlgebra
 	using Random
 	using SharedArrays
+	using Dates
 end
 @everywhere include("./src/AccelerateRT.jl")
 @everywhere using .AccelerateRT
@@ -44,23 +45,34 @@ function parseCommandline()
 		"--skip"
 			help = "whether to skip existing benchmark caches"
 			action = :store_true
+		"--time"
+			help = "display time after all tasks done"
+			action = :store_true
     end
     return parse_args(ARGS, s)
 end
 
 function main()
     args = parseCommandline()
-	parallel = ParallelCores != 1
-	if parallel
-		@info "Distributed Mode"
-	else
-		global_logger(TerminalLogger())
+	global_logger(TerminalLogger())
+	@info """
+		Distributed Mode: $((ParallelCores != 1) ? "ON" : "OFF")
+		Number of threads available: $(Threads.nthreads())  
+		Number of workers available: $(nworkers())
+	"""
+	timeBegin = now()
+	timeDelta = @elapsed begin
+		benchmark(args)
 	end
-	@info "Number of threads available: $(Threads.nthreads())"
-	@info "Number of workers available: $(nworkers())"
-	benchmark(args)
-	if parallel
-		rmprocs()
+	timeEnd = now()
+	rmprocs()
+	if args["time"]
+		@info """
+		# All Task Complete
+			Begin:   $(Dates.format(timeBegin, "yyyy-mm-dd at HH:MM:SS"))  
+			End:     $(Dates.format(timeEnd, "yyyy-mm-dd at HH:MM:SS"))  
+			Elapsed: $(timeDelta / 60) minutes  
+		"""
 	end
 end
 

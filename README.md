@@ -94,7 +94,7 @@ Commands
 ```
 >> julia .\benchmark.jl -h
 usage: benchmark.jl [--seed SEED] [--samples SAMPLES]
-                    [--resolution RESOLUTION] [--skip] [-h]
+                    [--resolution RESOLUTION] [--skip] [--time] [-h]
 
 optional arguments:
   --seed SEED           random seed (type: Int64, default: 0)
@@ -104,7 +104,13 @@ optional arguments:
                         screen resolution (in format WxH) (default:
                         "50x50")
   --skip                whether to skip existing benchmark caches  
+  --time                display time after all tasks done
   -h, --help            show this help message and exit
+```
+
+For example, the following executes benchmark with `4` threads available for each worker, `200` random samples for each configuration, and random seed set to `123`, and display time info after all tasks done:
+```
+>> julia -t 4 .\benchmark.jl --samples 200 --seed 123 --time
 ```
 
 By default, `benchmark.jl` distributes workers to all cores available. Modify `ParallelCores` variable to change this behavior: `0` for all cores, `1` for single-process, else customized number of workers.
