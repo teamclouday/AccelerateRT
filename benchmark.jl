@@ -1,15 +1,17 @@
 # run benchmark and store all data
 
+using Distributed: @everywhere, @distributed, addprocs, rmprocs, nprocs
 using ArgParse
-using Logging
-using ProgressLogging
-using TerminalLoggers
-using LinearAlgebra
-using Plots
-using Random
 
-include("src/AccelerateRT.jl")
-using .AccelerateRT
+@everywhere using Logging
+@everywhere using ProgressLogging
+@everywhere using TerminalLoggers
+@everywhere using LinearAlgebra
+@everywhere using Random
+@everywhere using SharedArrays
+
+@everywhere include("./src/AccelerateRT.jl")
+@everywhere using .AccelerateRT
 
 function parseCommandline()
     s = ArgParseSettings()
@@ -25,48 +27,84 @@ function parseCommandline()
 		"--resolution"
 			help = "screen resolution (in format WxH)"
 			default = "50x50"
+		"--distribute"
+			help = "distribute tasks to multi-cores (set 0 to use all cores)"
+			arg_type = Int
+            default = 0
 		"--skip"
 			help = "whether to skip existing benchmark caches"
 			action = :store_true
     end
-    return parse_args(s)
+    return parse_args(ARGS, s)
 end
 
 function main()
     args = parseCommandline()
+	cpulen = length(Sys.cpu_info())
+	@assert 0 <= args["distribute"] <= cpulen "Number of cores: $(args["distribute"]) not available!"
+	parallel = args["distribute"] != 1
+	if parallel
+		@info "Distributed Mode"
+		addprocs(iszero(args["distribute"]) ? cpulen - 1 : args["distribute"] - 1)
+	end
 	global_logger(TerminalLogger())
-	@info "Number of threads available: $(Threads.nthreads())"
+	@info "Number of threads available:   $(Threads.nthreads())"
+	@info "Number of processes available: $(nprocs())"
 	benchmark(args)
+	if parallel
+		rmprocs()
+	end
 end
 
 function benchmark(args)
 	@assert args["samples"] >= 1 "argument samples should be positive!"
 	@assert args["seed"] >= 0 "argument seed should be positive!"
 	@assert !isempty(args["resolution"]) "argument resolution should not be empty!"
-	models = ["teapot", "bunny", "dragon", "sponza"]
-	modelsSetting = Dict(
-		"teapot" 	=> (Vector3(0.0f0), 3.0f0, false),
-		"bunny"		=> (Vector3{Float32}(0.0, 0.1, 0.1), 3.0f0, false),
-		"dragon"	=> (Vector3(0.0f0), 5.0f0, false),
-		"sponza"	=> (Vector3(0.0f0), 1.0f0, true)
-	)
-    bvhTypes = ["middle", "median", "sah"]
-	camera = Camera(
-		Vector3(0.0f0), Vector3(0.0f0), Float32(45),
-		getResolution(args["resolution"])
-	)
-	for (m,b) in Iterators.product(models, bvhTypes)
-		filepath = getFilePath(m, b, args)
-		if args["skip"] && isfile(filepath)
+	@info """
+	# Benchmark Info
+		Random Seed:         $(args["seed"])  
+		Random Samples:      $(args["samples"])  
+		Camera Resolution:   $(args["resolution"])  
+		Skip Existing File?  $(args["skip"] ? "true" : "false")  
+	"""
+	sharedData = SharedArray{UInt32}([
+		getResolution(args["resolution"])...,
+		UInt32(args["skip"]), args["samples"],
+		args["seed"]
+	])
+	iters = reduce(hcat, reshape(collect.(Iterators.product(1:4, 1:3)), :))
+	iterIdxM = SharedArray{Int}(iters[1, :])
+	iterIdxB = SharedArray{Int}(iters[2, :])
+	@sync @distributed for idx in 1:length(iterIdxM)
+		mIdx, bIdx = iterIdxM[idx], iterIdxB[idx]
+		models = ["teapot", "bunny", "dragon", "sponza"]
+		bvhTypes = ["middle", "median", "sah"]
+		m, b = models[mIdx], bvhTypes[bIdx]
+		modelsSetting = Dict(
+			"teapot" 	=> (Vector3(0.0f0), 3.0f0, false),
+			"bunny"		=> (Vector3{Float32}(0.0, 0.1, 0.1), 3.0f0, false),
+			"dragon"	=> (Vector3(0.0f0), 5.0f0, false),
+			"sponza"	=> (Vector3(0.0f0), 1.0f0, true)
+		)
+		resW, resH = sharedData[1], sharedData[2]
+		skip = sharedData[3] == 1
+		samples = sharedData[4]
+		seed = sharedData[5]
+		camera = ScreenCamera(
+			Vector3(0.0f0), Vector3(0.0f0), Float32(45),
+			Vector2{UInt32}(resW, resH)
+		)
+		filepath = getFilePath(m, b, samples, resW, resH)
+		if skip && isfile(filepath)
 			@info "Skipped $filepath"
 			continue
 		end
 		@info "Now benchmark on ($m, $b)"
 		data = Dict()
 		setting = modelsSetting[m]
-		positions = sampleSphere(args["samples"], args["seed"]) .* setting[2]
+		positions = sampleSphere(samples, seed) .* setting[2]
 		loaded = loadData(m, b)
-		for it in 1:args["samples"]
+		for it in 1:samples
 			# set camera position
 			center, pos = setting[1], (positions[it, :] .+ setting[1])
 			if setting[3] # whether to revert position and center
@@ -79,26 +117,24 @@ function benchmark(args)
 			# update data
 			data[it] = sample
 		end
-		println("Saving to $filepath")
-		saveFileBinary(filepath, Dict("samples" => args["samples"], "positions" => positions, "data" => data))
+		@info "Saving to $filepath"
+		saveFileBinary(filepath, Dict("samples" => samples, "positions" => positions, "data" => data))
 	end
 end
-
-mutable struct Camera
+@everywhere mutable struct ScreenCamera
 	pos::Vector3{Float32}
 	center::Vector3{Float32}
 	fov::Float32
 	res::Vector2{UInt32}
 end
-
-mutable struct Ray
+@everywhere mutable struct Ray
 	origin::Vector3{Float32}
 	dir::Vector3{Float32}
 	dist::Float32
 end
 
 # intersection with AABB
-function intersect(ray::Ray, bounds)::Bool
+@everywhere function intersect(ray::Ray, bounds)::Bool
 	invDir = 1.0f0 ./ ray.dir
 	f = (bounds.pMax .- ray.origin) .* invDir
 	n = (bounds.pMin .- ray.origin) .* invDir
@@ -110,7 +146,7 @@ function intersect(ray::Ray, bounds)::Bool
 end
 
 # intersection with triangle
-function intersect!(ray::Ray, v0::Vector3, v1::Vector3, v2::Vector3)::Bool
+@everywhere function intersect!(ray::Ray, v0::Vector3, v1::Vector3, v2::Vector3)::Bool
 	e1 = v1 .- v0
 	e2 = v2 .- v0
 	pvec = cross(ray.dir, e2)
@@ -137,7 +173,7 @@ function intersect!(ray::Ray, v0::Vector3, v1::Vector3, v2::Vector3)::Bool
 	return true
 end
 
-function loadData(model, bvhType)
+@everywhere function loadData(model, bvhType)
 	@assert isdir("structures") "Error: structures folder not found!"
 	# find path
 	filepath = (() -> begin
@@ -163,9 +199,7 @@ function loadData(model, bvhType)
 	return vertices, ordered, bvh
 end
 
-function rayTrace(
-	camera::Camera; loadInfo=nothing, loaded=nothing
-)
+@everywhere function rayTrace(camera::ScreenCamera; loadInfo=nothing, loaded=nothing)
 	vertices, ordered, bvh = nothing, nothing, nothing
 	if loaded !== nothing
 		vertices, ordered, bvh = loaded
@@ -244,7 +278,7 @@ function rayTrace(
 	return depthMap, treeDepthMap, visitsMap, visitsLeafMap
 end
 
-function sampleSphere(num=100, seed=0)
+@everywhere function sampleSphere(num=100, seed=0)
 	@assert num > 0 "generated number should be positive!"
 	@assert seed >= 0 "seed has to be non-negative!"
 	rng = MersenneTwister()
@@ -276,15 +310,15 @@ function sampleSphere(num=100, seed=0)
 	return res
 end
 
+@everywhere function getFilePath(model, bvhType, samples, w, h)
+	name = "S$(samples)_R$(w)x$(h)_$(model)_$(bvhType).jld2"
+	return joinpath("caches", name)
+end
+
 function getResolution(res)
 	@assert occursin(r"^[0-9]+x[0-9]+$", res) "argument resolution $res is invalid!"
 	w, h = collect(eachmatch(r"[0-9]+", res))
 	return Vector2{UInt32}(parse(UInt32, w.match), parse(UInt32, h.match))
-end
-
-function getFilePath(model, bvhType, args)
-	name = "S$(args["samples"])_R$(args["resolution"])_$(model)_$(bvhType).jld2"
-	return joinpath("caches", name)
 end
 
 main()
