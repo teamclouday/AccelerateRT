@@ -1,7 +1,7 @@
 # manipulate files
 
+using Images: save
 using JLD2: save, load
-using StaticArrays: MVector
 using .AccelerateRT: Vector3, computeNormal
 
 function loadFileText(path::String)::String
@@ -19,11 +19,19 @@ function loadFileBinary(path::String)
 end
 
 function saveFileBinary(path::String, data)
-    if ispath(path)
+    if isfile(path)
         @warn "[saveFileBinary] Warning: overwritting $(path)!"
     end
     mkpath(dirname(path))
     save(path, data)
+end
+
+function saveFileImage(path::String, img)
+    if isfile(path)
+        @warn "[saveFileBinary] Warning: overwritting $(path)!"
+    end
+    mkpath(dirname(path))
+    save(path, img)
 end
 
 function loadObjFile(path::String)

@@ -6,6 +6,7 @@ begin
 end
 
 using ArgParse, Printf, CSyntax
+using Images: colorview, RGB
 using GLFW, ModernGL, CImGui
 
 include("src/AccelerateRT.jl")
@@ -45,7 +46,7 @@ end
 
 mutable struct Configs
     showUI # where to show UI
-    keyDown # which keys in WASD are down
+    keyDown # which keys in WASD are down, plus CTRL key
     mousePos # current mouse position
     mouseDown # which mouse buttons are down
     imguiFocus # is UI in focus
@@ -55,7 +56,7 @@ mutable struct Configs
     wireframe # whether is wireframe mode
     gldebug # whether to output OpenGL debug info
     Configs() = begin
-        new(true, [false, false, false, false],
+        new(true, [false, false, false, false, false],
             [-1.0,0.0,0.0,0.0], [false, false],
             false, APPWIDTH, APPHEIGHT,
             Color4{Float32}(0.2,0.2,0.2,1), false, false)
@@ -196,7 +197,22 @@ function renderUI(app, renderData, renderDataBVH)
             end
             CImGui.ColorEdit3("Background", app.configs.background)
             CImGui.Separator()
-            CImGui.Text("Press F12 to toggle UI")
+            CImGui.Text("Controls")
+            if CImGui.CollapsingHeader("ESC")
+                CImGui.Text("Close App")
+            end
+            if CImGui.CollapsingHeader("F12")
+                CImGui.Text("Toggle UI")
+            end
+            if CImGui.CollapsingHeader("CTRL+S")
+                CImGui.Text("Save Screenshot")
+            end
+            if CImGui.CollapsingHeader("WASD")
+                CImGui.Text("Move Camera")
+            end
+            if CImGui.CollapsingHeader("Left/Right Mouse Click")
+                CImGui.Text("Move Camera")
+            end
             CImGui.Text("Author: teamclouday")
             CImGui.EndTabItem()
         end
@@ -309,6 +325,12 @@ function initApp()
             app.configs.keyDown[3] = action != GLFW.RELEASE
         elseif key == GLFW.KEY_D
             app.configs.keyDown[4] = action != GLFW.RELEASE
+        elseif key == GLFW.KEY_LEFT_CONTROL
+            app.configs.keyDown[5] = action != GLFW.RELEASE
+        end
+        if key == GLFW.KEY_S && action == GLFW.PRESS && app.configs.keyDown[5]
+            @info "Saving screenshot to $APPNAME.png"
+            saveScreenShot(app.configs.winW, app.configs.winH)
         end
     end)
     GLFW.SetCursorPosCallback(window, (_, posX, posY) -> begin
@@ -511,6 +533,14 @@ function loadRenderDataBVH(model, path)::RenderDataBVH
         VAO, VBO, nodeCount * 36, convert(Float32, maxDepth),
         Float32(1), convert(Float32, maxDepth), program,
         Color4{Float32}(1,0,0.4,0.5/maxDepth), false)
+end
+
+function saveScreenShot(width, height)
+    img = zeros(UInt8, 3 * width * height)
+    glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, img)
+    img = reverse(permutedims(reshape(img, 3, width, height), [1, 3, 2]), dims=2)
+    saveFileImage("$APPNAME.jpg", colorview(RGB, img / 255))
+    @info "Screenshot saved!"
 end
 
 main()
