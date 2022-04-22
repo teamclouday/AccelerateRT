@@ -118,7 +118,7 @@ function main()
             println("Constructing BVH with modified SAH (new algorithm)")
             primitives = createPrimitives(model)
             ordered = Vector3{UInt32}[]
-            bvh = BVH.constructBVHSAH!(primitives, ordered, 1, length(primitives))
+            bvh = BVH.constructBVHModified!(primitives, ordered, 1, length(primitives))
         end
         if args["save"]
             println("Saving to $path")

@@ -84,7 +84,7 @@ The following command visualizes `bunny` model and its precomputed BVH structure
 >> julia .\visualize.jl .\models\bunny\bunny.obj --bvh .\structures\__models_bunny_bunny_obj.median.jld2
 ```
 
-<img src="example.png" width="600" alt="bunnyBVH">
+<img src="figures/example.png" width="600" alt="bunnyBVH">
 
 ------
 

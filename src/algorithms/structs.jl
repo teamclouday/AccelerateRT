@@ -110,6 +110,26 @@ function computeSurfaceArea(b::AABB{T}) where T<:DataType
     return T(2) * (extent.x * extent.y + extent.x * extent.z + extent.y * extent.z)
 end
 
+function computeVolume(b::AABB{T}) where T<:DataType
+    extent = b.pMax - b.pMin
+    if isnan(sum(extent)) || isinf(sum(extent))
+        extent .= Vector3{T}(0,0,0)
+    end
+    return extent.x * extent.y * extent.z
+end
+
+function computeOverlap(b1::AABB{T}, b2::AABB{T})::AABB where T<:DataType
+    res = AABB{T}()
+    vMin = max(b1.pMin, b2.pMin)
+    vMax = min(b1.pMax, b2.pMax)
+    if any(vMin .>= vMax)
+        return res
+    end
+    combineAABB!(res, vMin)
+    combineAABB!(res, vMax)
+    return res
+end
+
 function BVHPrimitive(face::Vector3{K}, vertices::AbstractVector{Vector3{T}}) where {T<:DataType, K<:DataType}
     bounds = AABB(vertices[face.x], vertices[face.y], vertices[face.z])
     return BVHPrimitive{T,K}(

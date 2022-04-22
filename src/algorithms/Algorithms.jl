@@ -1,6 +1,7 @@
 module BVH
 
-export AABB, combineAABB!, combineAABB, computeCentroid, computeOffset, computeSurfaceArea
+export AABB, combineAABB!, combineAABB, computeCentroid,
+    computeOffset, computeSurfaceArea, computeVolume, computeOverlap
 export BVHPrimitive, BVHNode, BVHNodeFlatten, displayBVH, describeBVH
 export constructBVHSimple!
 export constructBVHSAH!

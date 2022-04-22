@@ -92,14 +92,14 @@ function benchmark(args)
 		UInt32(args["skip"]), args["samples"],
 		args["seed"]
 	])
-	iters = reduce(hcat, reshape(collect.(Iterators.product(1:4, 1:3)), :))
+	iters = reduce(hcat, reshape(collect.(Iterators.product(1:4, 1:4)), :))
 	iterIdxM = SharedArray{Int}(iters[1, :])
 	iterIdxB = SharedArray{Int}(iters[2, :])
 
 	@sync @distributed for idx = 1:length(iterIdxM)
 		mIdx, bIdx = iterIdxM[idx], iterIdxB[idx]
 		models = ["teapot", "bunny", "dragon", "sponza"]
-		bvhTypes = ["middle", "median", "sah"]
+		bvhTypes = ["middle", "median", "sah", "sahm"]
 		m, b = models[mIdx], bvhTypes[bIdx]
 		modelsSetting = Dict(
 			"teapot" 	=> (Vector3(0.0f0), 3.0f0, false),
@@ -138,7 +138,7 @@ function benchmark(args)
 				data[it] = sample
 			end
 			@info "Saving to $filepath"
-			saveFileBinary(filepath, Dict("samples" => samples, "positions" => positions, "data" => data))
+			saveFileBinary(filepath, Dict("positions" => positions, "data" => data))
 		end
 	end
 end
@@ -233,8 +233,8 @@ end
 	res = camera.res
 	depthMap = zeros(Float32, (res.x, res.y))
 	treeDepthMap = zeros(Integer, (res.x, res.y))
-	visitsMap = zeros(Integer, (res.x, res.y))
-	visitsLeafMap = zeros(Integer, (res.x, res.y))
+	visitsNodesMap = zeros(Integer, (res.x, res.y))
+	visitsPrimsMap = zeros(Integer, (res.x, res.y))
 	# compute info from camera
 	camForward = normalize(camera.center - camera.pos)
 	camRight = normalize(cross(camForward, Vector3{Float32}(0,1,0)))
@@ -262,7 +262,7 @@ end
 		stack = [(1, bvh)]
 		maxDepth = 0
 		visitsCount = 0
-		visitsLeafCount = 0
+		visitsPrims = 0
 		while !isempty(stack)
 			depth, node = popfirst!(stack)
 			visitsCount += 1
@@ -271,8 +271,8 @@ end
 			if intersect(ray, node.bounds)
 				if isempty(node.children)
 					# if is leaf, test intersection with triangle
-					visitsLeafCount += 1
 					for primIdx in node.primBegin:node.primEnd
+						visitsPrims += 1
 						face = ordered[primIdx]
 						v0 = vertices[face.x]
 						v1 = vertices[face.y]
@@ -290,14 +290,14 @@ end
 		# record info
 		depthMap[ix, iy] = ray.dist
 		treeDepthMap[ix, iy] = maxDepth
-		visitsMap[ix, iy] = visitsCount
-		visitsLeafMap[ix, iy] = visitsLeafCount
+		visitsNodesMap[ix, iy] = visitsCount
+		visitsPrimsMap[ix, iy] = visitsPrims
 		# update progress bar
 		Threads.atomic_add!(progIter, 1)
 		@logprogress progIter[] / progCount
 	end
 	end
-	return depthMap, treeDepthMap, visitsMap, visitsLeafMap
+	return depthMap, treeDepthMap, visitsNodesMap, visitsPrimsMap
 end
 
 @everywhere function sampleSphere(num=100, seed=0)

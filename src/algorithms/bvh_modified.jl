@@ -1,7 +1,9 @@
 # BVH modifed based on binned-SAH
 
-using .BVH: AABB, combineAABB, combineAABB!, computeOffset, computeCentroid, computeSurfaceArea, BVHNode, BVHPrimitive
+using .BVH: AABB, combineAABB, combineAABB!, computeOffset, computeCentroid,
+    computeSurfaceArea, computeOverlap, computeVolume, BVHNode, BVHPrimitive
 using ..AccelerateRT: ModelData, Vector3, DataType
+using LinearAlgebra: norm
 
 mutable struct SAHBucket
     count::Integer
@@ -50,7 +52,7 @@ function constructBVHModified!(
         mapFunc = x->x.centroid[splitDim]
         partialsort!(view(primitives, idxBegin:idxEnd), mid - idxBegin + 1; by=mapFunc)
     else
-        # else do normal SAH
+        # else do modified SAH
         nBuckets = 12
         buckets = [SAHBucket(0, AABB{T}()) for _ in 1:nBuckets]
         # step5: initialize buckets
@@ -73,10 +75,17 @@ function constructBVHModified!(
                 combineAABB!(b1, buckets[j].bounds)
                 c1 += buckets[j].count
             end
-            # TODO: modify SAH
-            costs[i] = (c0 * computeSurfaceArea(b0) + c1 * computeSurfaceArea(b1)) / computeSurfaceArea(boundsAll)
+            # blend between SAH and Volume
+            c_sah = (c0 * computeSurfaceArea(b0) + c1 * computeSurfaceArea(b1)) / computeSurfaceArea(boundsAll)
+            bOverlap = computeOverlap(b0, b1)
+            c_vol1 = computeVolume(bOverlap) / computeVolume(boundsAll)
+            c_dist = norm(computeCentroid(bOverlap) - computeCentroid(boundsAll)) / norm(boundsAll.pMax - boundsAll.pMin) * T(2)
+            c_sah2 = computeSurfaceArea(computeOverlap(b0, b1)) / computeSurfaceArea(boundsAll)
+            c_vol2 = T(1) - (computeVolume(b0) + computeVolume(b1) - computeVolume(bOverlap)) / computeVolume(boundsAll)
+            alpha = T(0.1)
+            costs[i] = alpha * c_sah + (T(1) - alpha) * (c_vol2 * c_vol1) * nPrims
         end
-        # step7: search bucket that minimizes SAH
+        # step7: search bucket that minimizes cost
         minSplitBucket = argmin(costs)
         minCost = costs[minSplitBucket]
         # step8: decide whether to create leaf or split
