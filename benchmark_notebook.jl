@@ -644,8 +644,29 @@ Visualization of 500 samples with resolution 100x100\
 Resolution does not affect results much!
 """
 
+# ╔═╡ e6ca7a73-14d8-47c9-b6ac-a4f9ab5b548b
+compareVisTeapot100x100 = visualizeComparison(models[1], 500, "100x100")
+
+# ╔═╡ 59e3b003-b23d-4e1e-a2f9-e7a00f5d3599
+savefig(compareVisTeapot100x100, "figures/compare_teapot100x100.png")
+
+# ╔═╡ 9bc3f36b-d05c-4f76-9745-0d10e54eeb10
+compareVisBunny100x100 = visualizeComparison(models[2], 500, "100x100")
+
+# ╔═╡ a4e87290-73d1-4211-b6a1-e060362662df
+savefig(compareVisBunny100x100, "figures/compare_bunny100x100.png")
+
+# ╔═╡ 950cdf6c-f8e0-4c4d-a24c-6c137e221251
+compareVisDragon100x100 = visualizeComparison(models[3], 500, "100x100")
+
+# ╔═╡ 8af79446-8cac-4a6a-b8b7-62f16f86df0b
+savefig(compareVisDragon100x100, "figures/compare_dragon100x100.png")
+
 # ╔═╡ 6c46a738-c1d9-467b-9d9a-93c4dcd41417
 compareVisSponza100x100 = visualizeComparison(models[4], 500, "100x100")
+
+# ╔═╡ 55349bfd-e931-44e1-b755-f75ea6a01adf
+savefig(compareVisSponza100x100, "figures/compare_sponza100x100.png")
 
 # ╔═╡ Cell order:
 # ╟─172dec87-d954-4060-85eb-3df1802ce37b
@@ -715,4 +736,11 @@ compareVisSponza100x100 = visualizeComparison(models[4], 500, "100x100")
 # ╟─c064eaab-a217-4172-a294-41c8e6cfbb2b
 # ╟─49ebc3cf-b456-4f1a-afc8-db81b9142e88
 # ╟─7c13cb1d-9230-40a5-a411-266a2f3d7a60
+# ╟─e6ca7a73-14d8-47c9-b6ac-a4f9ab5b548b
+# ╟─59e3b003-b23d-4e1e-a2f9-e7a00f5d3599
+# ╟─9bc3f36b-d05c-4f76-9745-0d10e54eeb10
+# ╟─a4e87290-73d1-4211-b6a1-e060362662df
+# ╟─950cdf6c-f8e0-4c4d-a24c-6c137e221251
+# ╟─8af79446-8cac-4a6a-b8b7-62f16f86df0b
 # ╟─6c46a738-c1d9-467b-9d9a-93c4dcd41417
+# ╟─55349bfd-e931-44e1-b755-f75ea6a01adf
