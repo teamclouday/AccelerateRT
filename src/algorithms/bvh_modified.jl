@@ -75,21 +75,37 @@ function constructBVHModified!(
                 combineAABB!(b1, buckets[j].bounds)
                 c1 += buckets[j].count
             end
-            # blend between SAH and Volume
+            # blend between SAH and VO
             c_sah = (c0 * computeSurfaceArea(b0) + c1 * computeSurfaceArea(b1)) / computeSurfaceArea(boundsAll)
             bOverlap = computeOverlap(b0, b1)
-            c_vol1 = computeVolume(bOverlap) / computeVolume(boundsAll)
-            c_dist = norm(computeCentroid(bOverlap) - computeCentroid(boundsAll)) / norm(boundsAll.pMax - boundsAll.pMin) * T(2)
-            c_sah2 = computeSurfaceArea(computeOverlap(b0, b1)) / computeSurfaceArea(boundsAll)
-            c_vol2 = T(1) - (computeVolume(b0) + computeVolume(b1) - computeVolume(bOverlap)) / computeVolume(boundsAll)
-            alpha = T(0.1)
-            costs[i] = alpha * c_sah + (T(1) - alpha) * (c_vol2 * c_vol1) * nPrims
+            c_vol = min(T(1), (computeVolume(b0) + computeVolume(b1) - computeVolume(bOverlap)) / computeVolume(boundsAll))
+            
+            # c_vol1 = computeVolume(bOverlap) / computeVolume(boundsAll)
+            c_dist = norm(computeCentroid(bOverlap) - computeCentroid(boundsAll)) / norm(boundsAll.pMax - boundsAll.pMin)
+            # c_sah2 = computeSurfaceArea(bOverlap) / computeSurfaceArea(boundsAll)
+            # c_sah3 = (computeSurfaceArea(b0) + computeSurfaceArea(b1)) / computeSurfaceArea(boundsAll)
+            # c_vol2 = (computeVolume(b0) + computeVolume(b1)) / computeVolume(boundsAll)
+            c_dist2 = (() -> begin
+                center = computeCentroid(boundsAll)
+                center0 = computeCentroid(b0)
+                center1 = computeCentroid(b1)
+                dist0 = norm(center0 - center)
+                dist1 = norm(center1 - center)
+                return abs(dist0 - dist1) / (dist0 + dist1)
+            end)()
+
+            # alpha = T(0.5)
+            alpha = T(0.2) + T(0.1) * (c_dist + c_dist2)  # 45.35, 43.87, 52.04
+            # alpha = T(0.2) + T(0.2) * c_dist2             # 45.39, 43.88, 52.12
+            # alpha = T(0.8) - T(0.2) * c_dist              # 45.53, 44.03, 52.37
+            costs[i] = (T(1) - alpha) * c_sah + alpha * c_vol * nPrims
         end
         # step7: search bucket that minimizes cost
         minSplitBucket = argmin(costs)
         minCost = costs[minSplitBucket]
+        maxCost = nPrims
         # step8: decide whether to create leaf or split
-        if nPrims >= 256 || minCost < nPrims
+        if nPrims >= 256 || minCost < maxCost
             # partition by assigned bucket
             mapFunc = x -> begin
                 b = round(Integer, nBuckets * computeOffset(boundsCentroid, x.centroid)[splitDim])

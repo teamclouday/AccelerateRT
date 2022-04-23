@@ -286,7 +286,7 @@ end
 function collectInfo(infoMaps)
 	n = length(infoMaps)
 	res = Dict()
-	names = ["TreeDepth", "NodeVisits", "PrimVisits"]
+	names = ["TreeDepth", "NodeVisits", "PrimVisits", "Score"]
 	for name in names
 		res[name] = Dict(
 			"max" => zeros(Integer, n),
@@ -295,15 +295,20 @@ function collectInfo(infoMaps)
 			"std" => zeros(Float32, n)
 		)
 	end
-	for nameIdx in 1:length(names)
-		name = names[nameIdx]
-		for idx in 1:n
+	for idx in 1:n
+		for nameIdx in 1:(length(names)-1)
+			name = names[nameIdx]
 			m = infoMaps[idx][nameIdx+1]
 			res[name]["max"][idx] = maximum(m)
 			res[name]["min"][idx] = minimum(m)
 			res[name]["mean"][idx] = mean(m)
 			res[name]["std"][idx] = std(m)
 		end
+		mScore = infoMaps[idx][3] .+ infoMaps[idx][4]
+		res[names[end]]["max"][idx] = maximum(mScore)
+		res[names[end]]["min"][idx] = minimum(mScore)
+		res[names[end]]["mean"][idx] = mean(mScore)
+		res[names[end]]["std"][idx] = std(mScore)
 	end
 	return res
 end
@@ -404,32 +409,38 @@ function visualizeAll(camera, model)
 	for bvhIdx in 1:length(bvhTypes)
 		c = rayTrace(camera; loadInfo=(model, bvhTypes[bvhIdx]))
 		p1 = visualize(c[1], :depth, (bvhIdx == 1 ? "PrimDepth" : ""), 15Plots.mm)
-		annotate!(p1, -(camera.res[1] * 0.2), camera.res[2] / 2, text(bvhTypes[bvhIdx], :center, 10))
+		annotate!(p1, -(camera.res[1] * 0.2), camera.res[2] * 0.5, text(bvhTypes[bvhIdx], :center, 10))
 		p2 = visualize(c[2], :colored, (bvhIdx == 1 ? "TreeDepth" : ""))
+		annotate!(p2, camera.res[1] * 0.5, -(camera.res[2] * 0.1), text(@sprintf("mean = %.2f", mean(c[2])), :center, 10))
 		p3 = visualize(c[3], :colored, (bvhIdx == 1 ? "NodeVisits" : ""))
+		annotate!(p3, camera.res[1] * 0.5, -(camera.res[2] * 0.1), text(@sprintf("mean = %.2f", mean(c[3])), :center, 10))
 		p4 = visualize(c[4], :colored, (bvhIdx == 1 ? "PrimVisits" : ""))
+		annotate!(p4, camera.res[1] * 0.5, -(camera.res[2] * 0.1), text(@sprintf("mean = %.2f", mean(c[4])), :center, 10))
+		# score = c[3] .+ c[4]
+		# p5 = visualize(score, :colored, (bvhIdx == 1 ? "Score" : ""))
+		# annotate!(p5, camera.res[1] * 0.5, -(camera.res[2] * 0.1), text(@sprintf("mean = %.2f", mean(score)), :center, 10))
 		push!(collected, p1, p2, p3, p4)
 	end
-	plot(collected..., layout=(length(bvhTypes), 4), size=(1000,800), legend=false)
+	plot(collected..., layout=(length(bvhTypes), 4), size=(800,500), legend=false)
 end
 
 # ╔═╡ ba50cd42-47d0-48b3-b00c-bb5924c801da
 function visualizeTrend(data, samples, title)
 	x = 1:samples
 	collected = []
-	for name in ["TreeDepth", "NodeVisits", "PrimVisits"]
+	for name in ["TreeDepth", "NodeVisits", "PrimVisits", "Score"]
 		p = plot(x, data[name]["max"], label="max", title=name, titlefontsize=10)
 		plot!(p, x, data[name]["min"], label="min")
 		plot!(p, x, data[name]["mean"], label="mean")
 		plot!(p, x, data[name]["std"], label="std")
 		push!(collected, p)
 	end
-	plot(collected..., layout=(3, 1), size=(800,500), plot_title=title)
+	plot(collected..., layout=(4, 1), size=(900,500), plot_title=title)
 end
 
 # ╔═╡ 4aeef626-dfc3-435a-9448-8c9939fc1fa5
 function visualizeComparison(model, samples, resolution)
-	dataTypes = ["TreeDepth", "NodeVisits", "PrimVisits"]
+	dataTypes = ["TreeDepth", "NodeVisits", "PrimVisits", "Score"]
 	valTypes = ["max", "mean", "std"]
 	plotData = zeros(Float32, length(valTypes), length(dataTypes), length(bvhTypes))
 	for bvhIdx in 1:length(bvhTypes)
@@ -456,7 +467,7 @@ function visualizeComparison(model, samples, resolution)
 			push!(collected, p)
 		end
 	end
-	plot(collected..., legend=nothing, size=(1000,600))
+	plot(collected..., legend=nothing, size=(1250,800), layout=(length(valTypes), length(dataTypes)))
 end
 
 # ╔═╡ c07fce63-9db6-4e11-9c51-150060d36e54
@@ -467,7 +478,7 @@ Compare different BVH's on teapot model
 
 # ╔═╡ f8ce933e-286f-403b-942b-f0b536ee52a1
 camera = Camera(
-	ACC.Vector3{Float32}(1, 3, 3),
+	ACC.Vector3{Float32}(0, 3, 3),
 	ACC.Vector3{Float32}(0, 0, 0),
 	45.0f0,
 	ACC.Vector2{UInt32}(25, 25)
@@ -580,61 +591,61 @@ Visualization of 500 samples
 
 # ╔═╡ 71c3532f-1d4a-44de-aadc-66a33e977aa4
 visualizeTrend(
-	collectInfo(loadData(models[1], bvhTypes[1], 500, "50x50")),
+	collectInfo(loadData(models[1], bvhTypes[1], 500, "100x100")),
 	500, "$(models[1]) $(bvhTypes[1])")
 
 # ╔═╡ 3faf1d5b-7998-41a1-8aff-541df4826518
 visualizeTrend(
-	collectInfo(loadData(models[1], bvhTypes[2], 500, "50x50")),
+	collectInfo(loadData(models[1], bvhTypes[2], 500, "100x100")),
 	500, "$(models[1]) $(bvhTypes[2])")
 
 # ╔═╡ 4e358b8e-6e1f-4915-80e4-f25a7961fd7e
 visualizeTrend(
-	collectInfo(loadData(models[1], bvhTypes[3], 500, "50x50")),
+	collectInfo(loadData(models[1], bvhTypes[3], 500, "100x100")),
 	500, "$(models[1]) $(bvhTypes[3])")
 
 # ╔═╡ 1852b0b4-0230-4c1a-b338-e7368623454f
 visualizeTrend(
-	collectInfo(loadData(models[1], bvhTypes[4], 500, "50x50")),
+	collectInfo(loadData(models[1], bvhTypes[4], 500, "100x100")),
 	500, "$(models[1]) $(bvhTypes[4])")
 
 # ╔═╡ bdaad362-49a4-4ee3-acc5-dbcf0b27b116
 md"""
-Visualization of 500 samples with resolution 50x50
+Visualization of 1000 samples with resolution 50x50
 """
 
 # ╔═╡ 9389f254-08b7-458b-8292-f1b1af2df455
-compareVisTeapot = visualizeComparison(models[1], 500, "50x50")
+compareVisTeapot = visualizeComparison(models[1], 1000, "50x50")
 
 # ╔═╡ 3f085494-55dc-4435-823c-1c4cee54ac05
 savefig(compareVisTeapot, "figures/compare_teapot.png")
 
 # ╔═╡ 57bba5db-ddaa-491f-b1d3-56ef0a26d361
-compareVisBunny = visualizeComparison(models[2], 500, "50x50")
+compareVisBunny = visualizeComparison(models[2], 1000, "50x50")
 
 # ╔═╡ 2729d589-f28a-4dbf-a736-910df8f7837a
 savefig(compareVisBunny, "figures/compare_bunny.png")
 
 # ╔═╡ c5830da6-295e-4c84-8ebf-6e682f4f90b6
-compareVisDragon = visualizeComparison(models[3], 500, "50x50")
+compareVisDragon = visualizeComparison(models[3], 1000, "50x50")
 
 # ╔═╡ 23a70b54-b432-40ec-9d7b-c3b1c59bfa7a
 savefig(compareVisDragon, "figures/compare_dragon.png")
 
 # ╔═╡ c064eaab-a217-4172-a294-41c8e6cfbb2b
-compareVisSponza = visualizeComparison(models[4], 500, "50x50")
+compareVisSponza = visualizeComparison(models[4], 1000, "50x50")
 
 # ╔═╡ 49ebc3cf-b456-4f1a-afc8-db81b9142e88
 savefig(compareVisSponza, "figures/compare_sponza.png")
 
 # ╔═╡ 7c13cb1d-9230-40a5-a411-266a2f3d7a60
 md"""
-Visualization of 100 samples with resolution 100x100\
+Visualization of 500 samples with resolution 100x100\
 Resolution does not affect results much!
 """
 
 # ╔═╡ 6c46a738-c1d9-467b-9d9a-93c4dcd41417
-compareVisTeapot100x100 = visualizeComparison(models[1], 100, "100x100")
+compareVisSponza100x100 = visualizeComparison(models[4], 500, "100x100")
 
 # ╔═╡ Cell order:
 # ╟─172dec87-d954-4060-85eb-3df1802ce37b
@@ -653,7 +664,7 @@ compareVisTeapot100x100 = visualizeComparison(models[1], 100, "100x100")
 # ╠═acf160be-a3cd-4c58-9895-25e9c1f13abe
 # ╠═2880acb4-7ff8-4bf6-a2f6-84f45adffe89
 # ╟─89bb0d31-f2d1-4f46-a46d-2359a34ba9ef
-# ╠═8c1a3646-cc41-45ce-8e21-9ba8eb151107
+# ╟─8c1a3646-cc41-45ce-8e21-9ba8eb151107
 # ╟─0e4805a4-05fc-48d2-8cc8-521976b2c0ee
 # ╟─8716782b-d88c-4247-b89b-9cb6793c6bb0
 # ╟─83f6f667-d39c-45b1-8929-db43191feba4
@@ -672,7 +683,7 @@ compareVisTeapot100x100 = visualizeComparison(models[1], 100, "100x100")
 # ╟─4aeef626-dfc3-435a-9448-8c9939fc1fa5
 # ╟─c07fce63-9db6-4e11-9c51-150060d36e54
 # ╠═f8ce933e-286f-403b-942b-f0b536ee52a1
-# ╠═49e97f5c-bb86-43a9-9ce7-0992b0d40a03
+# ╟─49e97f5c-bb86-43a9-9ce7-0992b0d40a03
 # ╟─fa788135-febf-4af6-aa0e-856f62a669e1
 # ╟─f4bd6b6c-9a6f-40fd-b1a0-2d92ed4de8f7
 # ╟─9a545956-4507-40bc-b864-800772280242
@@ -695,13 +706,13 @@ compareVisTeapot100x100 = visualizeComparison(models[1], 100, "100x100")
 # ╟─4e358b8e-6e1f-4915-80e4-f25a7961fd7e
 # ╟─1852b0b4-0230-4c1a-b338-e7368623454f
 # ╟─bdaad362-49a4-4ee3-acc5-dbcf0b27b116
-# ╠═9389f254-08b7-458b-8292-f1b1af2df455
+# ╟─9389f254-08b7-458b-8292-f1b1af2df455
 # ╟─3f085494-55dc-4435-823c-1c4cee54ac05
-# ╠═57bba5db-ddaa-491f-b1d3-56ef0a26d361
+# ╟─57bba5db-ddaa-491f-b1d3-56ef0a26d361
 # ╟─2729d589-f28a-4dbf-a736-910df8f7837a
-# ╠═c5830da6-295e-4c84-8ebf-6e682f4f90b6
+# ╟─c5830da6-295e-4c84-8ebf-6e682f4f90b6
 # ╟─23a70b54-b432-40ec-9d7b-c3b1c59bfa7a
-# ╠═c064eaab-a217-4172-a294-41c8e6cfbb2b
+# ╟─c064eaab-a217-4172-a294-41c8e6cfbb2b
 # ╟─49ebc3cf-b456-4f1a-afc8-db81b9142e88
 # ╟─7c13cb1d-9230-40a5-a411-266a2f3d7a60
 # ╟─6c46a738-c1d9-467b-9d9a-93c4dcd41417

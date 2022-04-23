@@ -8,7 +8,7 @@ mutable struct AABB{T<:DataType}
     pMax::Vector3{T}
 end
 
-Base.show(io::IO, x::AABB) = print(io, "[$(x.pMin),$(x.pMax)]")
+Base.show(io::IO, x::AABB) = print(io, "AABB[$(x.pMin),$(x.pMax)]")
 
 mutable struct BVHPrimitive{T<:DataType, K<:DataType}
     face::Vector3{K} # indices for vertices
@@ -16,7 +16,7 @@ mutable struct BVHPrimitive{T<:DataType, K<:DataType}
     centroid::Vector3{T} # center
 end
 
-Base.show(io::IO, x::BVHPrimitive) = print(io, "$(x.face)")
+Base.show(io::IO, x::BVHPrimitive) = print(io, "Prim($(x.face))")
 
 mutable struct BVHNode{T<:DataType}
     bounds::AABB{T}
@@ -122,8 +122,10 @@ function computeOverlap(b1::AABB{T}, b2::AABB{T})::AABB where T<:DataType
     res = AABB{T}()
     vMin = max(b1.pMin, b2.pMin)
     vMax = min(b1.pMax, b2.pMax)
-    if any(vMin .>= vMax)
-        return res
+    for i in 1:3
+        if vMin[i] >= vMax[i]
+            vMin[i] = vMax[i]
+        end
     end
     combineAABB!(res, vMin)
     combineAABB!(res, vMax)
